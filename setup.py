@@ -1,22 +1,24 @@
 from setuptools import setup, Extension
+from pybind11.setup_helpers import Pybind11Extension, build_ext
 import pybind11
 
+# Correct Eigen path for Mac installed via Homebrew
+EIGEN_PATH = "/usr/local/Cellar/eigen/3.4.0_1/include/eigen3"
+
 ext_modules = [
-    Extension(
-        'neural_network_cpp',
-        ['neural_network.cpp'],
-        include_dirs=[pybind11.get_include()],
-        language='c++',
-        extra_compile_args=['-std=c++11']
+    Pybind11Extension("neural_network_py",
+        ["neural_network_binding.cpp", "neural_network.cpp", "optimization_algorithms.cpp", "activation_functions.cpp"],
+        include_dirs=[
+            pybind11.get_include(), 
+            EIGEN_PATH
+        ],
+        extra_compile_args=["-std=c++17", f"-I{EIGEN_PATH}"],
+        cxx_std=17,
     ),
 ]
 
 setup(
-    name='neural_network_cpp',
-    version='0.0.1',
-    author='Your Name',
-    description='A neural network implementation with C++ backend',
+    name="neural_network_py",
     ext_modules=ext_modules,
-    setup_requires=['pybind11>=2.5.0'],
-    install_requires=['pybind11>=2.5.0'],
+    cmdclass={"build_ext": build_ext},
 )

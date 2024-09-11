@@ -1,321 +1,422 @@
-#include <vector>
-#include <cmath>
-#include <random>
+#include "neural_network.hpp"
+#include "exceptions.hpp"
 #include <algorithm>
-#include <stdexcept>
-#include <thread>
-#include <mutex>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <optional>
+#include <random>
+#include <fstream>
+#include <numeric>
+#include <iostream>
 
-namespace py = pybind11;
-
-class NeuralNetwork {
-private:
-    std::vector<int> layers;                                 // Stores the number of neurons in each layer
-    std::vector<std::vector<std::vector<double>>> weights;   // 3D vector to store weights
-    std::vector<std::vector<double>> biases;                 // 2D vector to store biases
-    std::string activation_function;                         // Name of the activation function to use
-    bool use_softmax_output;                                 // Flag to use softmax in the output layer
-
-    // Mutable vectors to store intermediate results during forward pass
-    mutable std::vector<std::vector<double>> activations;
-    mutable std::vector<std::vector<double>> zs;
-    
-    // Activation function
-    double activate(double x, bool is_output_layer) const;
-
-    // Derivative of the activation function
-    double activate_derivative(double x, bool is_output_layer) const;
-
-    // Softmax activation function for the output layer
-    std::vector<double> softmax(const std::vector<double>& x) const;
-
-    // Backpropagation algorithm
-    void backpropagate(const std::vector<double>& input, const std::vector<double>& target,
-                       std::vector<std::vector<std::vector<double>>>& weight_gradients,
-                       std::vector<std::vector<double>>& bias_gradients);
-
-public:
-    // Constructor
-    NeuralNetwork(const std::vector<int>& layer_sizes, const std::string& activation = "sigmoid", bool use_softmax = false);
-
-    // Forward pass: Compute the output for a given input
-    std::vector<double> forward(const std::vector<double>& input) const;
-
-    // Train the neural network using parallel batch stochastic gradient descent
-    void train(const std::vector<std::vector<double>>& inputs, 
-               const std::vector<std::vector<double>>& targets, 
-               int epochs, double learning_rate, int batch_size, int num_threads);
-
-    // Setter and getter methods
-    void set_activation(const std::string& activation);
-    [[nodiscard]] std::string get_activation() const;
-    void set_softmax_output(bool use_softmax);
-    [[nodiscard]] bool get_softmax_output() const;
-};
-
-// Function implementations
-
-double NeuralNetwork::activate(double x, bool is_output_layer) const {
-    if (is_output_layer && use_softmax_output) {
-        return x; // For softmax, we return the input unchanged
-    } else if (activation_function == "sigmoid") {
-        return 1.0 / (1.0 + std::exp(-x));
-    } else if (activation_function == "relu") {
-        return std::max(0.0, x);
-    } else if (activation_function == "tanh") {
-        return std::tanh(x);
-    } else {
-        throw std::runtime_error("Unknown activation function");
+NeuralNetwork::NeuralNetwork(const std::vector<int> &layer_sizes,
+                             double lr,
+                             ActivationFunction act_func,
+                             WeightInitialization weight_init,
+                             OptimizationAlgorithm opt_algo,
+                             RegularizationType reg_type,
+                             double reg_strength)
+    : layers(layer_sizes), learning_rate(lr), activation_function(act_func),
+      weight_init(weight_init), optimization_algo(opt_algo),
+      regularization_type(reg_type), regularization_strength(reg_strength)
+{
+    if (layer_sizes.size() < 2)
+    {
+        throw NetworkConfigurationError("Network must have at least two layers");
     }
-}
-
-double NeuralNetwork::activate_derivative(double x, bool is_output_layer) const {
-    if (is_output_layer && use_softmax_output) {
-        return 1.0; // The derivative for softmax is handled differently in backpropagation
-    } else if (activation_function == "sigmoid") {
-        double sig = activate(x, false);
-        return sig * (1 - sig);
-    } else if (activation_function == "relu") {
-        return x > 0 ? 1.0 : 0.0;
-    } else if (activation_function == "tanh") {
-        double tanh_x = std::tanh(x);
-        return 1 - tanh_x * tanh_x;
-    } else {
-        throw std::runtime_error("Unknown activation function");
-    }
-}
-
-std::vector<double> NeuralNetwork::softmax(const std::vector<double>& x) const {
-    std::vector<double> result(x.size());
-    double max_val = *std::max_element(x.begin(), x.end());
-    double sum = 0.0;
-    
-    // Compute exp(x - max_val) for numerical stability
-    for (size_t i = 0; i < x.size(); ++i) {
-        result[i] = std::exp(x[i] - max_val);
-        sum += result[i];
-    }
-    
-    // Normalize
-    for (double& val : result) {
-        val /= sum;
-    }
-    
-    return result;
-}
-
-void NeuralNetwork::backpropagate(const std::vector<double>& input, const std::vector<double>& target,
-                   std::vector<std::vector<std::vector<double>>>& weight_gradients,
-                   std::vector<std::vector<double>>& bias_gradients) {
-    // Forward pass
-    forward(input);
-    
-    // Backward pass
-    std::vector<std::vector<double>> deltas;
-    
-    // Compute error for the output layer
-    std::vector<double> output_error(target.size());
-    if (use_softmax_output) {
-        for (size_t i = 0; i < target.size(); ++i) {
-            output_error[i] = activations.back()[i] - target[i];
-        }
-    } else {
-        for (size_t i = 0; i < target.size(); ++i) {
-            double error = activations.back()[i] - target[i];
-            output_error[i] = error * activate_derivative(zs.back()[i], true);
+    for (int size : layer_sizes)
+    {
+        if (size <= 0)
+        {
+            throw NetworkConfigurationError("Each layer must have at least one neuron");
         }
     }
-    deltas.push_back(output_error);
-    
-    // Compute error for hidden layers
-    for (int i = static_cast<int>(weights.size()) - 2; i >= 0; --i) {
-        std::vector<double> layer_error(weights[i].size());
-        for (size_t j = 0; j < weights[i].size(); ++j) {
-            double error = 0.0;
-            for (size_t k = 0; k < weights[i+1].size(); ++k) {
-                error += weights[i+1][k][j] * deltas.front()[k];
-            }
-            layer_error[j] = error * activate_derivative(zs[i][j], false);
-        }
-        deltas.insert(deltas.begin(), layer_error);
+    if (lr <= 0 || lr >= 1)
+    {
+        throw NetworkConfigurationError("Learning rate must be between 0 and 1");
     }
-    
-    // Accumulate gradients
-    for (size_t i = 0; i < weights.size(); ++i) {
-        for (size_t j = 0; j < weights[i].size(); ++j) {
-            for (size_t k = 0; k < weights[i][j].size(); ++k) {
-                weight_gradients[i][j][k] += deltas[i][j] * activations[i][k];
-            }
-            bias_gradients[i][j] += deltas[i][j];
+
+    weights.resize(layers.size() - 1);
+    biases.resize(layers.size() - 1);
+
+    if (optimization_algo == OptimizationAlgorithm::Adam ||
+        optimization_algo == OptimizationAlgorithm::RMSprop)
+    {
+        m_weights.resize(layers.size() - 1);
+        m_biases.resize(layers.size() - 1);
+        if (optimization_algo == OptimizationAlgorithm::Adam)
+        {
+            v_weights.resize(layers.size() - 1);
+            v_biases.resize(layers.size() - 1);
+        }
+    }
+
+    initialize_weights();
+    validate();
+}
+
+void NeuralNetwork::validate() const
+{
+    if (layers.size() < 2)
+    {
+        throw NetworkConfigurationError("Network must have at least two layers");
+    }
+    if (weights.size() != layers.size() - 1)
+    {
+        throw NetworkConfigurationError("Number of weight matrices must match number of layers minus one");
+    }
+    if (biases.size() != layers.size() - 1)
+    {
+        throw NetworkConfigurationError("Number of bias vectors must match number of layers minus one");
+    }
+
+    for (size_t i = 0; i < weights.size(); ++i)
+    {
+        if (weights[i].rows() != layers[i + 1] || weights[i].cols() != layers[i])
+        {
+            throw NetworkConfigurationError("Weight matrix dimensions mismatch");
+        }
+        if (biases[i].size() != layers[i + 1])
+        {
+            throw NetworkConfigurationError("Bias vector size mismatch");
         }
     }
 }
 
-NeuralNetwork::NeuralNetwork(const std::vector<int>& layer_sizes, const std::string& activation, bool use_softmax) 
-    : layers(layer_sizes), activation_function(activation), use_softmax_output(use_softmax) {
+void NeuralNetwork::initialize_weights()
+{
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::normal_distribution<> d(0, 1);
 
-    // Initialize weights and biases
-    for (size_t i = 1; i < layers.size(); ++i) {
-        weights.push_back(std::vector<std::vector<double>>(layers[i], std::vector<double>(layers[i-1])));
-        biases.push_back(std::vector<double>(layers[i]));
-        
-        // Initialize weights with random values
-        for (auto& neuron_weights : weights.back()) {
-            for (auto& weight : neuron_weights) {
-                weight = d(gen);
+    for (size_t i = 1; i < layers.size(); ++i)
+    {
+        int fan_in = layers[i - 1];
+        int fan_out = layers[i];
+
+        std::normal_distribution<> d;
+        switch (weight_init)
+        {
+        case WeightInitialization::Random:
+            d = std::normal_distribution<>(0.0, 0.1);
+            break;
+        case WeightInitialization::Xavier:
+            d = std::normal_distribution<>(0.0, std::sqrt(2.0 / (fan_in + fan_out)));
+            break;
+        case WeightInitialization::He:
+            d = std::normal_distribution<>(0.0, std::sqrt(2.0 / fan_in));
+            break;
+        }
+
+        weights[i - 1] = Eigen::MatrixXd::NullaryExpr(layers[i], layers[i - 1],
+                                                      [&]()
+                                                      { return d(gen); });
+        biases[i - 1] = Eigen::VectorXd::NullaryExpr(layers[i],
+                                                     [&]()
+                                                     { return d(gen); });
+    }
+}
+
+void NeuralNetwork::check_input_size(const Eigen::VectorXd &input) const
+{
+    if (input.size() != layers.front())
+    {
+        throw TrainingDataError("Input size does not match the first layer size");
+    }
+}
+
+void NeuralNetwork::check_target_size(const Eigen::VectorXd &target) const
+{
+    if (target.size() != layers.back())
+    {
+        throw TrainingDataError("Target size does not match the output layer size");
+    }
+}
+
+std::vector<Eigen::VectorXd> NeuralNetwork::feedforward(const Eigen::VectorXd &input) const
+{
+    check_input_size(input);
+
+    std::vector<Eigen::VectorXd> activations;
+    activations.push_back(input);
+
+    for (size_t i = 0; i < weights.size(); ++i)
+    {
+        Eigen::VectorXd z = weights[i] * activations.back() + biases[i];
+        activations.push_back(activate(z, activation_function));
+    }
+
+    return activations;
+}
+
+void NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd &target)
+{
+    check_input_size(input);
+    check_target_size(target);
+
+    auto activations = feedforward(input);
+    std::vector<Eigen::VectorXd> zs;
+    for (size_t i = 0; i < weights.size(); ++i) {
+        zs.push_back(weights[i] * activations[i] + biases[i]);
+    }
+
+    std::vector<Eigen::VectorXd> deltas(layers.size() - 1);
+
+    // Calculate output layer error
+    Eigen::VectorXd output_error;
+    if (activation_function == ActivationFunction::Softmax) {
+        output_error = activations.back() - target;
+    } else {
+        output_error = (activations.back() - target).array() * 
+                       activate_derivative(zs.back(), activation_function).array();
+    }
+    deltas.back() = output_error;
+
+    // Backpropagate error
+    for (int i = layers.size() - 2; i > 0; --i)
+    {
+        Eigen::VectorXd error = weights[i].transpose() * deltas[i];
+        deltas[i - 1] = error.array() * activate_derivative(zs[i-1], activation_function).array();
+    }
+
+    // Update weights and biases
+    for (size_t i = 0; i < weights.size(); ++i)
+    {
+        Eigen::MatrixXd weight_gradient = deltas[i] * activations[i].transpose();
+        Eigen::VectorXd bias_gradient = deltas[i];
+
+        // Apply regularization
+        switch (regularization_type)
+        {
+        case RegularizationType::L1:
+            weight_gradient.array() += regularization_strength * weights[i].array().sign();
+            break;
+        case RegularizationType::L2:
+            weight_gradient.array() += regularization_strength * weights[i].array();
+            break;
+        default:
+            break;
+        }
+
+        // Apply optimization algorithm
+        update_weights_and_biases(optimization_algo,
+                                  weights[i], biases[i],
+                                  weight_gradient, bias_gradient,
+                                  m_weights[i], m_biases[i],
+                                  v_weights[i], v_biases[i],
+                                  learning_rate, beta1, beta2, epsilon,
+                                  t);
+    }
+}
+
+void NeuralNetwork::train(const std::vector<Eigen::VectorXd>& inputs,
+                          const std::vector<Eigen::VectorXd>& targets,
+                          int epochs,
+                          int batch_size,
+                          double error_tolerance,
+                          double validation_split)
+{
+    if (inputs.size() != targets.size()) {
+        throw TrainingDataError("Number of inputs must match number of targets");
+    }
+    if (epochs <= 0 || batch_size <= 0 || validation_split < 0 || validation_split >= 1) {
+        throw std::invalid_argument("Invalid training parameters");
+    }
+
+    // Split data into training and validation sets
+    size_t validation_size = static_cast<size_t>(inputs.size() * validation_split);
+    size_t training_size = inputs.size() - validation_size;
+
+    std::vector<size_t> indices(inputs.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(indices.begin(), indices.end(), g);
+
+    std::vector<Eigen::VectorXd> train_inputs, train_targets, val_inputs, val_targets;
+    for (size_t i = 0; i < training_size; ++i) {
+        train_inputs.push_back(inputs[indices[i]]);
+        train_targets.push_back(targets[indices[i]]);
+    }
+    for (size_t i = training_size; i < inputs.size(); ++i) {
+        val_inputs.push_back(inputs[indices[i]]);
+        val_targets.push_back(targets[indices[i]]);
+    }
+
+    double best_val_loss = std::numeric_limits<double>::max();
+    int patience = 10, wait = 0;
+
+    for (int epoch = 0; epoch < epochs; ++epoch) {
+        // Shuffle training data
+        std::shuffle(indices.begin(), indices.begin() + training_size, g);
+
+        // Mini-batch training
+        for (size_t i = 0; i < training_size; i += batch_size) {
+            size_t batch_end = std::min(i + batch_size, training_size);
+            
+            // Process each sample in the batch
+            for (size_t j = i; j < batch_end; ++j) {
+                backpropagate(train_inputs[indices[j]], train_targets[indices[j]]);
             }
         }
-        
-        // Initialize biases with random values
-        for (auto& bias : biases.back()) {
-            bias = d(gen);
+
+        // Calculate losses
+        double train_loss = get_loss(train_inputs, train_targets);
+        double val_loss = get_loss(val_inputs, val_targets);
+
+        std::cout << "Epoch " << epoch << ". Training Loss: " << train_loss 
+                  << ", Validation Loss: " << val_loss << std::endl;
+        // Early stopping
+        if (val_loss < best_val_loss) {
+            best_val_loss = val_loss;
+            wait = 0;
+        } else {
+            wait++;
+            if (wait >= patience) {
+                std::cout << "Early stopping at epoch " << epoch << std::endl;
+                break;
+            }
+        }
+
+        // Learning rate decay
+        if (epoch % 10 == 0 && epoch > 0) {
+            learning_rate *= 0.9;
+        }
+
+        if (train_loss < error_tolerance) {
+            std::cout << "Reached error tolerance at epoch " << epoch << std::endl;
+            break;
         }
     }
 }
 
-std::vector<double> NeuralNetwork::forward(const std::vector<double>& input) const {
-    activations.clear();
-    zs.clear();
-    activations.push_back(input);
-
-    // Compute activations for each layer
+std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>>NeuralNetwork::compute_gradients(const Eigen::VectorXd& input, const Eigen::VectorXd& target)
+{
+    std::vector<Eigen::VectorXd> activations = feedforward(input);
+    std::vector<Eigen::VectorXd> zs;
     for (size_t i = 0; i < weights.size(); ++i) {
-        std::vector<double> z(weights[i].size());
-        std::vector<double> activation(weights[i].size());
-        bool is_output_layer = (i == weights.size() - 1);
-        
-        for (size_t j = 0; j < weights[i].size(); ++j) {
-            double sum = 0.0;
-            for (size_t k = 0; k < weights[i][j].size(); ++k) {
-                sum += weights[i][j][k] * activations.back()[k];
-            }
-            z[j] = sum + biases[i][j];
-            activation[j] = activate(z[j], is_output_layer);
-        }
-        
-        zs.push_back(z);
-        activations.push_back(activation);
-
-        // Apply softmax to the output layer if specified
-        if (is_output_layer && use_softmax_output) {
-            activations.back() = softmax(zs.back());
-        }
+        zs.push_back(weights[i] * activations[i] + biases[i]);
     }
-    
+
+    std::vector<Eigen::VectorXd> deltas(layers.size() - 1);
+    std::vector<Eigen::MatrixXd> weight_gradients(weights.size());
+    std::vector<Eigen::VectorXd> bias_gradients(biases.size());
+
+    // Compute output layer error
+    Eigen::VectorXd output_error;
+    if (activation_function == ActivationFunction::Softmax) {
+        output_error = activations.back() - target;
+    } else {
+        output_error = (activations.back() - target).array() * 
+                       activate_derivative(zs.back(), activation_function).array();
+    }
+    deltas.back() = output_error;
+
+    // Backpropagate error
+    for (int i = static_cast<int>(layers.size()) - 2; i > 0; --i) {
+        Eigen::VectorXd error = weights[i].transpose() * deltas[i];
+        deltas[i-1] = error.array() * activate_derivative(zs[i-1], activation_function).array();
+    }
+
+    // Compute gradients
+    for (size_t i = 0; i < weights.size(); ++i) {
+        weight_gradients[i] = deltas[i] * activations[i].transpose();
+        bias_gradients[i] = deltas[i];
+    }
+
+    return {weight_gradients, bias_gradients};
+}
+
+void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd>& weight_gradients,
+                                         std::vector<Eigen::VectorXd>& bias_gradients)
+{
+    switch (regularization_type) {
+        case RegularizationType::L1:
+            for (size_t i = 0; i < weights.size(); ++i) {
+                weight_gradients[i].array() += regularization_strength * weights[i].array().sign();
+                bias_gradients[i].array() += regularization_strength * biases[i].array().sign();
+            }
+            break;
+        case RegularizationType::L2:
+            for (size_t i = 0; i < weights.size(); ++i) {
+                weight_gradients[i].array() += regularization_strength * weights[i].array();
+                bias_gradients[i].array() += regularization_strength * biases[i].array();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+Eigen::VectorXd NeuralNetwork::predict(const Eigen::VectorXd &input) const
+{
+    auto activations = feedforward(input);
     return activations.back();
 }
 
-void NeuralNetwork::train(const std::vector<std::vector<double>>& inputs, 
-           const std::vector<std::vector<double>>& targets, 
-           int epochs, double learning_rate, int batch_size, int num_threads) {
-    
-    int num_samples = static_cast<int>(inputs.size());
-    int num_batches = static_cast<int>(std::ceil(static_cast<double>(num_samples) / batch_size));
+Eigen::VectorXd NeuralNetwork::predict_with_softmax(const Eigen::VectorXd &input) const
+{
+    Eigen::VectorXd output = predict(input);
+    Eigen::VectorXd exp_output = output.array().exp();
+    return exp_output / exp_output.sum();
+}
 
-    // Create a vector of indices and shuffle it
-    std::vector<int> indices(num_samples);
-    for (int i = 0; i < num_samples; ++i) {
-        indices[i] = i;
+double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd> &inputs,
+                               const std::vector<Eigen::VectorXd> &targets) const
+{
+    if (inputs.size() != targets.size())
+    {
+        throw TrainingDataError("Number of inputs must match number of targets");
     }
-    std::random_device rd;
-    std::mt19937 g(rd());
 
-    // Mutex for thread-safe weight updates
-    std::mutex weights_mutex;
+    double total_loss = 0.0;
+    for (size_t i = 0; i < inputs.size(); ++i)
+    {
+        Eigen::VectorXd prediction = predict(inputs[i]);
+        Eigen::VectorXd error = prediction - targets[i];
+        total_loss += error.squaredNorm();
+    }
+    return total_loss / (2 * inputs.size());
+}
 
-    for (int epoch = 0; epoch < epochs; ++epoch) {
-        // Shuffle the indices at the start of each epoch
-        std::shuffle(indices.begin(), indices.end(), g);
+void NeuralNetwork::save_weights(const std::string &filename) const
+{
+    std::ofstream file(filename, std::ios::binary);
+    if (!file)
+    {
+        throw std::runtime_error("Unable to open file for writing");
+    }
 
-        // Process each batch
-        for (int batch = 0; batch < num_batches; ++batch) {
-            int start_idx = batch * batch_size;
-            int end_idx = std::min((batch + 1) * batch_size, num_samples);
+    for (const auto &w : weights)
+    {
+        Eigen::MatrixXf w_float = w.cast<float>();
+        file.write(reinterpret_cast<char *>(w_float.data()), w_float.size() * sizeof(float));
+    }
 
-            // Accumulate gradients for the batch
-            std::vector<std::vector<std::vector<double>>> weight_gradients(weights.size());
-            std::vector<std::vector<double>> bias_gradients(biases.size());
-
-            for (size_t i = 0; i < weights.size(); ++i) {
-                weight_gradients[i].resize(weights[i].size());
-                for (size_t j = 0; j < weights[i].size(); ++j) {
-                    weight_gradients[i][j].resize(weights[i][j].size(), 0.0);
-                }
-                bias_gradients[i].resize(biases[i].size(), 0.0);
-            }
-
-            // Lambda function for processing a range of samples
-            auto process_range = [&](int start, int end) {
-                for (int i = start; i < end; ++i) {
-                    int idx = indices[i];
-                    backpropagate(inputs[idx], targets[idx], weight_gradients, bias_gradients);
-                }
-            };
-
-            // Divide work among threads
-            std::vector<std::thread> threads;
-            int samples_per_thread = (end_idx - start_idx) / num_threads;
-            for (int t = 0; t < num_threads; ++t) {
-                int thread_start = start_idx + t * samples_per_thread;
-                int thread_end = (t == num_threads - 1) ? end_idx : thread_start + samples_per_thread;
-                threads.emplace_back(process_range, thread_start, thread_end);
-            }
-
-            // Wait for all threads to complete
-            for (auto& thread : threads) {
-                thread.join();
-            }
-
-            // Update weights and biases with accumulated gradients
-            std::lock_guard<std::mutex> lock(weights_mutex);
-            for (size_t i = 0; i < weights.size(); ++i) {
-                for (size_t j = 0; j < weights[i].size(); ++j) {
-                    for (size_t k = 0; k < weights[i][j].size(); ++k) {
-                        weights[i][j][k] -= learning_rate * weight_gradients[i][j][k] / (end_idx - start_idx);
-                    }
-                    biases[i][j] -= learning_rate * bias_gradients[i][j] / (end_idx - start_idx);
-                }
-            }
-        }
+    for (const auto &b : biases)
+    {
+        Eigen::VectorXf b_float = b.cast<float>();
+        file.write(reinterpret_cast<char *>(b_float.data()), b_float.size() * sizeof(float));
     }
 }
 
-void NeuralNetwork::set_activation(const std::string& activation) {
-    if (activation != "sigmoid" && activation != "relu" && activation != "tanh") {
-        throw std::runtime_error("Unsupported activation function");
+void NeuralNetwork::load_weights(const std::string &filename)
+{
+    std::ifstream file(filename, std::ios::binary);
+    if (!file)
+    {
+        throw std::runtime_error("Unable to open file for reading");
     }
-    activation_function = activation;
-}
 
-std::string NeuralNetwork::get_activation() const {
-    return activation_function;
-}
+    for (auto &w : weights)
+    {
+        Eigen::MatrixXf w_float(w.rows(), w.cols());
+        file.read(reinterpret_cast<char *>(w_float.data()), w_float.size() * sizeof(float));
+        w = w_float.cast<double>();
+    }
 
-void NeuralNetwork::set_softmax_output(bool use_softmax) {
-    use_softmax_output = use_softmax;
-}
+    for (auto &b : biases)
+    {
+        Eigen::VectorXf b_float(b.size());
+        file.read(reinterpret_cast<char *>(b_float.data()), b_float.size() * sizeof(float));
+        b = b_float.cast<double>();
+    }
 
-bool NeuralNetwork::get_softmax_output() const {
-    return use_softmax_output;
-}
-
-// Python module definition
-PYBIND11_MODULE(neural_network_cpp, m) {
-    py::class_<NeuralNetwork>(m, "NeuralNetwork")
-        .def(py::init<const std::vector<int>&, const std::string&, bool>(),
-             py::arg("layer_sizes"), py::arg("activation") = "sigmoid", py::arg("use_softmax") = false)
-        .def("forward", &NeuralNetwork::forward)
-        .def("train", &NeuralNetwork::train,
-             py::arg("inputs"), py::arg("targets"), py::arg("epochs"),
-             py::arg("learning_rate"), py::arg("batch_size"), py::arg("num_threads"))
-        .def("set_activation", &NeuralNetwork::set_activation)
-        .def("get_activation", &NeuralNetwork::get_activation)
-        .def("set_softmax_output", &NeuralNetwork::set_softmax_output)
-        .def("get_softmax_output", &NeuralNetwork::get_softmax_output);
+    validate();
 }
