@@ -32,18 +32,17 @@ public:
 
     void validate() const;
     std::vector<Eigen::VectorXd> feedforward(const Eigen::VectorXd &input) const;
-    void NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
+    void backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
     void train(const std::vector<Eigen::VectorXd>& inputs,
            const std::vector<Eigen::VectorXd>& targets,
            int epochs,
            int batch_size,
            double error_tolerance,
            double validation_split);
-    std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>> NeuralNetwork::compute_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
-    void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd> &weight_gradients,
-                                             std::vector<Eigen::VectorXd> &bias_gradients);
+    std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>> compute_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
+    void apply_regularization(std::vector<Eigen::MatrixXd> &weight_gradients,
+                              std::vector<Eigen::VectorXd> &bias_gradients);
     Eigen::VectorXd predict(const Eigen::VectorXd &input) const;
-    // Eigen::VectorXd predict_with_softmax(const Eigen::VectorXd &input) const;
     double get_loss(const std::vector<Eigen::VectorXd> &inputs,
                     const std::vector<Eigen::VectorXd> &targets) const;
     void save_weights(const std::string &filename) const;
