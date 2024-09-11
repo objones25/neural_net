@@ -43,7 +43,7 @@ public:
     void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd> &weight_gradients,
                                              std::vector<Eigen::VectorXd> &bias_gradients);
     Eigen::VectorXd predict(const Eigen::VectorXd &input) const;
-    Eigen::VectorXd predict_with_softmax(const Eigen::VectorXd &input) const;
+    // Eigen::VectorXd predict_with_softmax(const Eigen::VectorXd &input) const;
     double get_loss(const std::vector<Eigen::VectorXd> &inputs,
                     const std::vector<Eigen::VectorXd> &targets) const;
     void save_weights(const std::string &filename) const;

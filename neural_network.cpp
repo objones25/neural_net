@@ -136,10 +136,18 @@ std::vector<Eigen::VectorXd> NeuralNetwork::feedforward(const Eigen::VectorXd &i
     std::vector<Eigen::VectorXd> activations;
     activations.push_back(input);
 
-    for (size_t i = 0; i < weights.size(); ++i)
+    for (size_t i = 0; i < weights.size() - 1; ++i)
     {
         Eigen::VectorXd z = weights[i] * activations.back() + biases[i];
         activations.push_back(activate(z, activation_function));
+    }
+
+    // Handle the output layer separately
+    Eigen::VectorXd z_output = weights.back() * activations.back() + biases.back();
+    if (activation_function == ActivationFunction::Softmax) {
+        activations.push_back(activate(z_output, ActivationFunction::Softmax));
+    } else {
+        activations.push_back(activate(z_output, activation_function));
     }
 
     return activations;
@@ -161,6 +169,7 @@ void NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::Vec
     // Calculate output layer error
     Eigen::VectorXd output_error;
     if (activation_function == ActivationFunction::Softmax) {
+        // For Softmax, the gradient is simply the difference between output and target
         output_error = activations.back() - target;
     } else {
         output_error = (activations.back() - target).array() * 
@@ -350,13 +359,6 @@ Eigen::VectorXd NeuralNetwork::predict(const Eigen::VectorXd &input) const
     return activations.back();
 }
 
-Eigen::VectorXd NeuralNetwork::predict_with_softmax(const Eigen::VectorXd &input) const
-{
-    Eigen::VectorXd output = predict(input);
-    Eigen::VectorXd exp_output = output.array().exp();
-    return exp_output / exp_output.sum();
-}
-
 double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd> &inputs,
                                const std::vector<Eigen::VectorXd> &targets) const
 {
@@ -369,10 +371,16 @@ double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd> &inputs,
     for (size_t i = 0; i < inputs.size(); ++i)
     {
         Eigen::VectorXd prediction = predict(inputs[i]);
-        Eigen::VectorXd error = prediction - targets[i];
-        total_loss += error.squaredNorm();
+        if (activation_function == ActivationFunction::Softmax) {
+            // Use cross-entropy loss for Softmax
+            total_loss -= (targets[i].array() * prediction.array().log()).sum();
+        } else {
+            // Use mean squared error for other activation functions
+            Eigen::VectorXd error = prediction - targets[i];
+            total_loss += error.squaredNorm();
+        }
     }
-    return total_loss / (2 * inputs.size());
+    return total_loss / inputs.size();
 }
 
 void NeuralNetwork::save_weights(const std::string &filename) const
