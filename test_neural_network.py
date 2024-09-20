@@ -4,13 +4,14 @@ import numpy as np
 def test_network(optimizer_name):
     try:
         print(f"\nTesting with {optimizer_name}")
+        learning_rate = 0.01 if optimizer_name == "GradientDescent" else 0.001
         network = nn.NeuralNetwork(
             layer_sizes=[2, 3, 1],
             hidden_activation=nn.ActivationType.Tanh,
             output_activation=nn.ActivationType.Sigmoid,
             weight_init=nn.NeuralNetwork.WeightInitialization.Xavier,
             optimizer_name=optimizer_name,
-            learning_rate=0.01,
+            learning_rate=learning_rate,
             reg_type=nn.NeuralNetwork.RegularizationType.L2,
             reg_strength=0.01
         )

@@ -62,7 +62,20 @@
         "type_traits": "cpp",
         "utility": "cpp",
         "format": "cpp",
-        "text_encoding": "cpp"
+        "text_encoding": "cpp",
+        "__tree": "cpp",
+        "bitset": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "map": "cpp",
+        "print": "cpp",
+        "semaphore": "cpp",
+        "set": "cpp",
+        "span": "cpp",
+        "sstream": "cpp",
+        "chrono": "cpp",
+        "stop_token": "cpp",
+        "thread": "cpp"
     },
     "python.terminal.activateEnvironment": false
 }

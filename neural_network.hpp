@@ -21,11 +21,10 @@ public:
                   double reg_strength = 0.0);
 
     void train(const std::vector<Eigen::VectorXd>& inputs,
-               const std::vector<Eigen::VectorXd>& targets,
-               int epochs,
-               int batch_size,
-               double error_tolerance = 1e-4,
-               double validation_split = 0.2);
+           const std::vector<Eigen::VectorXd>& targets,
+           int epochs,
+           int batch_size,
+           double error_tolerance = 1e-4);
 
     Eigen::VectorXd predict(const Eigen::VectorXd& input) const;
     double get_loss(const std::vector<Eigen::VectorXd>& inputs,
@@ -35,7 +34,7 @@ public:
     static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string& name, double learning_rate) {
         return create_optimizer(name, learning_rate);
     }
-
+    void reset();
 private:
     std::vector<int> layers;
     std::vector<Eigen::MatrixXd> weights;
@@ -58,4 +57,7 @@ private:
                       const std::vector<Eigen::VectorXd>& batch_targets);
     void check_input_size(const Eigen::VectorXd& input) const;
     void check_target_size(const Eigen::VectorXd& target) const;
+    bool is_valid(const Eigen::MatrixXd& mat) const;
+    bool is_valid(const Eigen::VectorXd& vec) const;
+
 };
