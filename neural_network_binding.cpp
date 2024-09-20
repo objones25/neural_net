@@ -1,7 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
-#include "main.hpp"
+#include "neural_network.hpp"
+#include "optimization_algorithms.hpp"
+#include "activation_functions.hpp"
+#include "exceptions.hpp"
 #include <iostream>
 
 namespace py = pybind11;
@@ -10,19 +13,14 @@ PYBIND11_MODULE(neural_network_py, m)
 {
     std::cout << "Initializing module..." << std::endl;
 
-    py::enum_<ActivationFunction>(m, "ActivationFunction")
-        .value("Sigmoid", ActivationFunction::Sigmoid)
-        .value("ReLU", ActivationFunction::ReLU)
-        .value("TanH", ActivationFunction::TanH);
+    py::enum_<ActivationFunction::Type>(m, "ActivationType")
+        .value("Linear", ActivationFunction::Type::Linear)
+        .value("ReLU", ActivationFunction::Type::ReLU)
+        .value("Sigmoid", ActivationFunction::Type::Sigmoid)
+        .value("Tanh", ActivationFunction::Type::Tanh)
+        .value("Softmax", ActivationFunction::Type::Softmax);
 
-    std::cout << "ActivationFunction enum created" << std::endl;
-
-    py::enum_<OptimizationAlgorithm>(m, "OptimizationAlgorithm")
-        .value("GradientDescent", OptimizationAlgorithm::GradientDescent)
-        .value("Adam", OptimizationAlgorithm::Adam)
-        .value("RMSprop", OptimizationAlgorithm::RMSprop);
-
-    std::cout << "OptimizationAlgorithm enum created" << std::endl;
+    std::cout << "ActivationType enum created" << std::endl;
 
     py::class_<NeuralNetwork> neural_network(m, "NeuralNetwork");
 
@@ -43,21 +41,28 @@ PYBIND11_MODULE(neural_network_py, m)
     std::cout << "RegularizationType enum created" << std::endl;
 
     neural_network
-        .def(py::init<const std::vector<int> &, double, ActivationFunction, NeuralNetwork::WeightInitialization, OptimizationAlgorithm, NeuralNetwork::RegularizationType, double>(),
+        .def(py::init<const std::vector<int>&,
+                      ActivationFunction::Type,
+                      ActivationFunction::Type,
+                      NeuralNetwork::WeightInitialization,
+                      const std::string&,
+                      double,
+                      NeuralNetwork::RegularizationType,
+                      double>(),
              py::arg("layer_sizes"),
-             py::arg("lr") = 0.01,
-             py::arg("act_func") = ActivationFunction::Sigmoid,
+             py::arg("hidden_activation") = ActivationFunction::Type::ReLU,
+             py::arg("output_activation") = ActivationFunction::Type::Sigmoid,
              py::arg("weight_init") = NeuralNetwork::WeightInitialization::Random,
-             py::arg("opt_algo") = OptimizationAlgorithm::GradientDescent,
+             py::arg("optimizer_name") = "GradientDescent",
+             py::arg("learning_rate") = 0.01,
              py::arg("reg_type") = NeuralNetwork::RegularizationType::None,
              py::arg("reg_strength") = 0.0)
         .def("train", &NeuralNetwork::train,
              py::arg("inputs"), py::arg("targets"), py::arg("epochs"),
-             py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4)
+             py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4,
+             py::arg("validation_split") = 0.2)
         .def("predict", &NeuralNetwork::predict)
-        .def("get_loss", &NeuralNetwork::get_loss)
-        .def("save_weights", &NeuralNetwork::save_weights)
-        .def("load_weights", &NeuralNetwork::load_weights);
+        .def("get_loss", &NeuralNetwork::get_loss);
 
     std::cout << "NeuralNetwork methods bound" << std::endl;
 
@@ -67,11 +72,18 @@ PYBIND11_MODULE(neural_network_py, m)
 
     std::cout << "Custom exceptions registered" << std::endl;
 
-    // Expose activation functions
-    m.def("activate", &activate, "Apply activation function to input");
-    m.def("activate_derivative", &activate_derivative, "Compute derivative of activation function");
+    // Bind optimization algorithms
+    py::class_<OptimizationAlgorithm, std::unique_ptr<OptimizationAlgorithm>>(m, "OptimizationAlgorithm");
+    py::class_<GradientDescent, OptimizationAlgorithm>(m, "GradientDescent")
+        .def(py::init<double>());
+    py::class_<Adam, OptimizationAlgorithm>(m, "Adam")
+        .def(py::init<double, double, double, double>());
+    py::class_<RMSprop, OptimizationAlgorithm>(m, "RMSprop")
+        .def(py::init<double, double, double>());
 
-    std::cout << "Activation functions exposed" << std::endl;
+    m.def("create_optimizer", &create_optimizer);
+
+    std::cout << "Optimization algorithms bound" << std::endl;
 
     std::cout << "Module initialization complete" << std::endl;
 }
