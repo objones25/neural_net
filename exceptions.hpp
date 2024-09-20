@@ -12,3 +12,13 @@ class TrainingDataError : public std::runtime_error {
 public:
     TrainingDataError(const std::string& what_arg) : std::runtime_error(what_arg) {}
 };
+
+class NumericalInstabilityError : public std::runtime_error {
+public:
+    NumericalInstabilityError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};
+
+class GradientExplodingError : public std::runtime_error {
+public:
+    GradientExplodingError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};

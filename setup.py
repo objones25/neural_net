@@ -2,8 +2,8 @@ from setuptools import setup, Extension
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 import pybind11
 
-# Correct Eigen path for Mac installed via Homebrew
-EIGEN_PATH = "/usr/local/Cellar/eigen/3.4.0_1/include/eigen3"
+# Adjust this path to match your Eigen installation
+EIGEN_PATH = "/usr/local/include/eigen3"
 
 ext_modules = [
     Pybind11Extension("neural_network_py",

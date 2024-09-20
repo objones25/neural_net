@@ -1,16 +1,17 @@
 import neural_network_py as nn
 import numpy as np
 
-def test_network(opt_algo):
+def test_network(optimizer_name):
     try:
-        print(f"\nTesting with {opt_algo.name}")
-        print(f"OptimizationAlgorithm enum value: {opt_algo.value}")
+        print(f"\nTesting with {optimizer_name}")
+        learning_rate = 0.01 if optimizer_name == "GradientDescent" else 0.001
         network = nn.NeuralNetwork(
             layer_sizes=[2, 3, 1],
-            lr=0.01,
-            act_func=nn.ActivationFunction.TanH,
+            hidden_activation=nn.ActivationType.Tanh,
+            output_activation=nn.ActivationType.Sigmoid,
             weight_init=nn.NeuralNetwork.WeightInitialization.Xavier,
-            opt_algo=opt_algo,
+            optimizer_name=optimizer_name,
+            learning_rate=learning_rate,
             reg_type=nn.NeuralNetwork.RegularizationType.L2,
             reg_strength=0.01
         )
@@ -36,14 +37,9 @@ def test_network(opt_algo):
         import traceback
         traceback.print_exc()
 
-# Print enum values
-print(f"GradientDescent enum value: {nn.OptimizationAlgorithm.GradientDescent.value}")
-print(f"Adam enum value: {nn.OptimizationAlgorithm.Adam.value}")
-print(f"RMSprop enum value: {nn.OptimizationAlgorithm.RMSprop.value}")
-
 # Test all optimization algorithms
-test_network(nn.OptimizationAlgorithm.GradientDescent)
-test_network(nn.OptimizationAlgorithm.Adam)
-test_network(nn.OptimizationAlgorithm.RMSprop)
+test_network("GradientDescent")
+test_network("Adam")
+test_network("RMSprop")
 
 print("Script execution completed.")
