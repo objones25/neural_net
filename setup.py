@@ -12,7 +12,7 @@ ext_modules = [
             pybind11.get_include(), 
             EIGEN_PATH
         ],
-        extra_compile_args=["-std=c++17", f"-I{EIGEN_PATH}"],
+        extra_compile_args=["-std=c++17", f"-I{EIGEN_PATH}", "-g"],
         cxx_std=17,
     ),
 ]

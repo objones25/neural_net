@@ -20,7 +20,7 @@ public:
     Eigen::VectorXd activateOutput(const Eigen::VectorXd& x) const;
     Eigen::VectorXd derivativeOutput(const Eigen::VectorXd& x) const;
 
-    Type getOutputActivationType() const { return outputType; };
+    Type getOutputActivationType() const { return outputType; }
 
 private:
     std::function<Eigen::VectorXd(const Eigen::VectorXd&)> hiddenActivation;

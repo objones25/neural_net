@@ -36,11 +36,11 @@ PYBIND11_MODULE(neural_network_py, m)
 
     // Bind NeuralNetwork class
     neural_network
-        .def(py::init<const std::vector<int>&,
+        .def(py::init<const std::vector<int> &,
                       ActivationFunction::Type,
                       ActivationFunction::Type,
                       NeuralNetwork::WeightInitialization,
-                      const std::string&,
+                      const std::string &,
                       double,
                       NeuralNetwork::RegularizationType,
                       double>(),
@@ -52,35 +52,29 @@ PYBIND11_MODULE(neural_network_py, m)
              py::arg("learning_rate") = 0.01,
              py::arg("reg_type") = NeuralNetwork::RegularizationType::None,
              py::arg("reg_strength") = 0.0)
-        .def("train", [](NeuralNetwork& self,
-                         const std::vector<Eigen::VectorXd>& inputs,
-                         const std::vector<Eigen::VectorXd>& targets,
-                         int epochs,
-                         int batch_size,
-                         double error_tolerance) {
-            try {
-                self.train(inputs, targets, epochs, batch_size, error_tolerance);
-            } catch (const std::exception& e) {
-                throw std::runtime_error(std::string("Training failed: ") + e.what());
-            }
-        }, py::arg("inputs"), py::arg("targets"), py::arg("epochs"),
-           py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4)
-        .def("predict", [](const NeuralNetwork& self, const Eigen::VectorXd& input) {
-            try {
-                return self.predict(input);
-            } catch (const std::exception& e) {
-                throw std::runtime_error(std::string("Prediction failed: ") + e.what());
-            }
-        })
-        .def("get_loss", [](const NeuralNetwork& self,
-                            const std::vector<Eigen::VectorXd>& inputs,
-                            const std::vector<Eigen::VectorXd>& targets) {
-            try {
-                return self.get_loss(inputs, targets);
-            } catch (const std::exception& e) {
-                throw std::runtime_error(std::string("Loss calculation failed: ") + e.what());
-            }
-        });
+        .def("train", [](NeuralNetwork &self, const std::vector<Eigen::VectorXd> &inputs, const std::vector<Eigen::VectorXd> &targets, int epochs, int batch_size, double error_tolerance)
+             {
+        try {
+            self.train(inputs, targets, epochs, batch_size, error_tolerance);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Training failed: ") + e.what());
+        } }, py::arg("inputs"), py::arg("targets"), py::arg("epochs"), py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4)
+        .def("predict", [](const NeuralNetwork &self, const Eigen::VectorXd &input)
+             {
+        try {
+            return self.predict(input);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Prediction failed: ") + e.what());
+        } })
+        .def("get_loss", [](const NeuralNetwork &self, const std::vector<Eigen::VectorXd> &inputs, const std::vector<Eigen::VectorXd> &targets)
+             {
+        try {
+            return self.get_loss(inputs, targets);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Loss calculation failed: ") + e.what());
+        } })
+        .def_property_readonly("layers", &NeuralNetwork::getLayers)
+        .def_property_readonly("weights", &NeuralNetwork::getWeights);
 
     // Register custom exceptions
     py::register_exception<NetworkConfigurationError>(m, "NetworkConfigurationError");
