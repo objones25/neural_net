@@ -116,3 +116,11 @@ void NeuralNetwork::check_gradients(const Eigen::VectorXd &input, const Eigen::V
         }
     }
 }
+
+void NeuralNetwork::check_weights_initialization() const {
+    for (size_t i = 0; i < weights.size(); ++i) {
+        if (weights[i].size() == 0) {
+            throw WeightInitializationError("Weights are not properly initialized at layer " + std::to_string(i));
+        }
+    }
+}

@@ -19,6 +19,9 @@ void NeuralNetwork::train(const std::vector<Eigen::VectorXd>& inputs,
             throw std::invalid_argument("Invalid training parameters");
         }
 
+        // Check if weights are initialized
+        check_weights_initialization();
+
         std::cout << "Starting training with " << epochs << " epochs and batch size " << batch_size << std::endl;
 
         std::vector<size_t> indices(inputs.size());
@@ -57,8 +60,14 @@ void NeuralNetwork::train(const std::vector<Eigen::VectorXd>& inputs,
             }
         }
         DEBUG_LOG("Training completed");
+    } catch (const WeightInitializationError& e) {
+        std::cerr << "Weight initialization error during training: " << e.what() << std::endl;
+        throw;
+    } catch (const SizeMismatchError& e) {
+        std::cerr << "Size mismatch error during training: " << e.what() << std::endl;
+        throw;
     } catch (const std::exception& e) {
-        std::cerr << "Error in train method: " << e.what() << std::endl;
+        std::cerr << "Unexpected error during training: " << e.what() << std::endl;
         throw;
     }
 }
@@ -70,52 +79,71 @@ void NeuralNetwork::update_batch(const std::vector<Eigen::VectorXd>& batch_input
         DEBUG_LOG("Starting batch update");
         std::vector<Eigen::MatrixXd> weight_gradients(weights.size());
         std::vector<Eigen::VectorXd> bias_gradients(biases.size());
+        std::vector<Eigen::MatrixXd> initial_weights = weights;
+        std::vector<Eigen::VectorXd> z_values;
+        std::vector<Eigen::VectorXd> bn_gamma_gradients(batch_norms.size());
+        std::vector<Eigen::VectorXd> bn_beta_gradients(batch_norms.size());
 
+        // Initialize gradients
         for (size_t i = 0; i < weights.size(); ++i) {
             weight_gradients[i] = Eigen::MatrixXd::Zero(weights[i].rows(), weights[i].cols());
             bias_gradients[i] = Eigen::VectorXd::Zero(biases[i].size());
         }
 
-        std::vector<Eigen::MatrixXd> initial_weights = weights;
-
+        // Compute gradients for the batch
         for (size_t i = 0; i < batch_inputs.size(); ++i) {
-            try {
-                std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>> gradients =
-                    backpropagate(batch_inputs[i], batch_targets[i]);
+            auto [activations, batch_z_values] = feedforward_with_intermediates(batch_inputs[i]);
+            z_values = batch_z_values;  // Store the last computed z_values
+            auto [sample_weight_gradients, sample_bias_gradients] = backpropagate(batch_inputs[i], batch_targets[i]);
 
-                std::vector<Eigen::MatrixXd>& sample_weight_gradients = gradients.first;
-                std::vector<Eigen::VectorXd>& sample_bias_gradients = gradients.second;
-
-                for (size_t j = 0; j < weights.size(); ++j) {
-                    weight_gradients[j] += sample_weight_gradients[j];
-                    bias_gradients[j] += sample_bias_gradients[j];
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error in backpropagate: " << e.what() << std::endl;
-                throw;
+            for (size_t j = 0; j < weights.size(); ++j) {
+                weight_gradients[j] += sample_weight_gradients[j];
+                bias_gradients[j] += sample_bias_gradients[j];
             }
         }
 
+        // Average the gradients
         for (size_t i = 0; i < weights.size(); ++i) {
             weight_gradients[i] /= batch_inputs.size();
             bias_gradients[i] /= batch_inputs.size();
         }
 
+        // Compute batch norm gradients
+        for (size_t i = 0; i < batch_norms.size(); ++i) {
+            bn_gamma_gradients[i] = Eigen::VectorXd::Zero(layers[i + 1]);
+            bn_beta_gradients[i] = Eigen::VectorXd::Zero(layers[i + 1]);
+            for (const auto& input : batch_inputs) {
+                auto [activations, batch_z_values] = feedforward_with_intermediates(input);
+                bn_gamma_gradients[i] += (batch_z_values[i].array() * activations[i + 1].array()).matrix();
+                bn_beta_gradients[i] += activations[i + 1];
+            }
+            bn_gamma_gradients[i] /= batch_inputs.size();
+            bn_beta_gradients[i] /= batch_inputs.size();
+        }
+
+        // Apply regularization
         apply_regularization(weight_gradients, bias_gradients);
 
-        DEBUG_LOG("Weight gradients norm: ");
-        for (const auto& grad : weight_gradients) {
-            std::cout << grad.norm() << " ";
-        }
-        std::cout << std::endl;
-
+        // Update weights and biases
         for (size_t i = 0; i < weights.size(); ++i) {
             optimizer->update(weights[i], biases[i], weight_gradients[i], bias_gradients[i]);
 
             DEBUG_LOG("Weight update norm: " << (weights[i] - initial_weights[i]).norm());
 
             if (i < batch_norms.size()) {
-                batch_norms[i].update_parameters(weight_gradients[i], bias_gradients[i], optimizer->get_learning_rate());
+                // Update batch normalization parameters
+                Eigen::VectorXd mean = z_values[i].rowwise().mean();
+                Eigen::VectorXd var = ((z_values[i].colwise() - mean).array().square().rowwise().sum() / z_values[i].cols()).sqrt();
+                
+                batch_norms[i].update_running_stats(mean, var);
+
+                // Apply the gradients to gamma and beta
+                Eigen::VectorXd gamma = batch_norms[i].get_gamma();
+                Eigen::VectorXd beta = batch_norms[i].get_beta();
+                gamma -= optimizer->get_learning_rate() * bn_gamma_gradients[i];
+                beta -= optimizer->get_learning_rate() * bn_beta_gradients[i];
+                batch_norms[i].set_gamma(gamma);
+                batch_norms[i].set_beta(beta);
 
                 weights[i] = weights[i].unaryExpr([](double x) { return std::isfinite(x) ? x : 0.0; });
                 biases[i] = biases[i].unaryExpr([](double x) { return std::isfinite(x) ? x : 0.0; });
@@ -124,6 +152,62 @@ void NeuralNetwork::update_batch(const std::vector<Eigen::VectorXd>& batch_input
         DEBUG_LOG("Batch update completed");
     } catch (const std::exception& e) {
         std::cerr << "Error in update_batch method: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd>& weight_gradients,
+                                         std::vector<Eigen::VectorXd>& bias_gradients)
+{
+    try {
+        // Check if weights are initialized
+        check_weights_initialization();
+
+        // Check if sizes match
+        if (weights.size() != weight_gradients.size()) {
+            throw SizeMismatchError("Number of weight matrices (" + std::to_string(weights.size()) + 
+                                    ") does not match number of gradient matrices (" + 
+                                    std::to_string(weight_gradients.size()) + ")");
+        }
+
+        switch (regularization_type)
+        {
+        case RegularizationType::L1:
+            for (size_t i = 0; i < weights.size(); ++i)
+            {
+                if (weights[i].rows() != weight_gradients[i].rows() || weights[i].cols() != weight_gradients[i].cols()) {
+                    throw SizeMismatchError("Weight matrix size (" + std::to_string(weights[i].rows()) + "x" + 
+                                            std::to_string(weights[i].cols()) + ") does not match gradient matrix size (" + 
+                                            std::to_string(weight_gradients[i].rows()) + "x" + 
+                                            std::to_string(weight_gradients[i].cols()) + ") at index " + std::to_string(i));
+                }
+                weight_gradients[i].array() += regularization_strength * weights[i].array().sign();
+            }
+            break;
+        case RegularizationType::L2:
+            for (size_t i = 0; i < weights.size(); ++i)
+            {
+                if (weights[i].rows() != weight_gradients[i].rows() || weights[i].cols() != weight_gradients[i].cols()) {
+                    throw SizeMismatchError("Weight matrix size (" + std::to_string(weights[i].rows()) + "x" + 
+                                            std::to_string(weights[i].cols()) + ") does not match gradient matrix size (" + 
+                                            std::to_string(weight_gradients[i].rows()) + "x" + 
+                                            std::to_string(weight_gradients[i].cols()) + ") at index " + std::to_string(i));
+                }
+                weight_gradients[i].array() += regularization_strength * weights[i].array();
+            }
+            break;
+        default:
+            // No regularization
+            break;
+        }
+    } catch (const WeightInitializationError& e) {
+        std::cerr << "Weight initialization error in apply_regularization: " << e.what() << std::endl;
+        throw;
+    } catch (const SizeMismatchError& e) {
+        std::cerr << "Size mismatch error in apply_regularization: " << e.what() << std::endl;
+        throw;
+    } catch (const std::exception& e) {
+        std::cerr << "Unexpected error in apply_regularization: " << e.what() << std::endl;
         throw;
     }
 }
@@ -157,28 +241,5 @@ double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd>& inputs,
     } catch (const std::exception& e) {
         std::cerr << "Error in get_loss method: " << e.what() << std::endl;
         throw;
-    }
-}
-
-void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd>& weight_gradients,
-                                         std::vector<Eigen::VectorXd>& bias_gradients)
-{
-    switch (regularization_type)
-    {
-    case RegularizationType::L1:
-        for (size_t i = 0; i < weights.size(); ++i)
-        {
-            weight_gradients[i].array() += regularization_strength * weights[i].array().sign();
-        }
-        break;
-    case RegularizationType::L2:
-        for (size_t i = 0; i < weights.size(); ++i)
-        {
-            weight_gradients[i].array() += regularization_strength * weights[i].array();
-        }
-        break;
-    default:
-        // No regularization
-        break;
     }
 }

@@ -1,9 +1,17 @@
 #include "neural_network.hpp"
 #include "neural_network_common.hpp"
+#include "exceptions.hpp"
 
 std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>>
 NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd &target)
 {
+    if (input.size() != layers.front()) {
+        throw SizeMismatchError("Input size does not match the first layer size");
+    }
+    if (target.size() != layers.back()) {
+        throw SizeMismatchError("Target size does not match the output layer size");
+    }
+
     auto [activations, z_values] = feedforward_with_intermediates(input);
     std::vector<Eigen::VectorXd> deltas(layers.size() - 1);
     std::vector<Eigen::MatrixXd> weight_gradients(weights.size());
@@ -39,7 +47,21 @@ NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd
     // Backpropagate error
     for (int i = static_cast<int>(layers.size()) - 2; i >= 0; --i)
     {
-        Eigen::VectorXd d_batch_norm = batch_norms[i].backward(deltas[i + 1], z_values[i]);
+        if (deltas[i + 1].size() != batch_norms[i].get_features()) {
+            throw SizeMismatchError("Delta size mismatch for batch normalization at layer " + std::to_string(i));
+        }
+
+        Eigen::VectorXd d_batch_norm;
+        try {
+            d_batch_norm = batch_norms[i].backward(deltas[i + 1], z_values[i]);
+        } catch (const std::exception& e) {
+            throw NumericalInstabilityError("Batch normalization backward pass failed at layer " + std::to_string(i) + ": " + e.what());
+        }
+
+        if (d_batch_norm.size() != weights[i].rows()) {
+            throw SizeMismatchError("Batch norm gradient size does not match weight matrix dimensions at layer " + std::to_string(i));
+        }
+
         Eigen::VectorXd error = weights[i].transpose() * d_batch_norm;
         Eigen::VectorXd derivative = activation_function.derivativeHidden(z_values[i]);
         deltas[i] = error.array() * derivative.array();
@@ -52,16 +74,17 @@ NeuralNetwork::backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd
     // Compute gradients
     for (size_t i = 0; i < weights.size(); ++i)
     {
+        if (deltas[i].size() != weights[i].rows() || activations[i].size() != weights[i].cols()) {
+            throw SizeMismatchError("Delta or activation size mismatch for weight gradient calculation at layer " + std::to_string(i));
+        }
+
         weight_gradients[i] = deltas[i] * activations[i].transpose();
         bias_gradients[i] = deltas[i];
 
         // Check for valid gradients
         if (!is_valid(weight_gradients[i]) || !is_valid(bias_gradients[i]))
         {
-            std::cout << "Invalid gradients detected for layer " << i << std::endl;
-            // Replace invalid gradients with zeros
-            weight_gradients[i] = Eigen::MatrixXd::Zero(weight_gradients[i].rows(), weight_gradients[i].cols());
-            bias_gradients[i] = Eigen::VectorXd::Zero(bias_gradients[i].size());
+            throw NumericalInstabilityError("Invalid gradients detected for layer " + std::to_string(i));
         }
     }
 

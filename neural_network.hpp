@@ -70,6 +70,7 @@ private:
     backpropagate(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
     void apply_regularization(std::vector<Eigen::MatrixXd>& weight_gradients,
                               std::vector<Eigen::VectorXd>& bias_gradients);
+    void check_weights_initialization() const;
     void update_batch(const std::vector<Eigen::VectorXd> &batch_inputs,
                       const std::vector<Eigen::VectorXd> &batch_targets);
     void check_input_size(const Eigen::VectorXd &input) const;

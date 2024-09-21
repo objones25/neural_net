@@ -22,3 +22,13 @@ class GradientExplodingError : public std::runtime_error {
 public:
     GradientExplodingError(const std::string& what_arg) : std::runtime_error(what_arg) {}
 };
+
+class WeightInitializationError : public std::runtime_error {
+public:
+    WeightInitializationError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};
+
+class SizeMismatchError : public std::runtime_error {
+public:
+    SizeMismatchError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};
