@@ -7,7 +7,7 @@ EIGEN_PATH = "/usr/local/include/eigen3"
 
 ext_modules = [
     Pybind11Extension("neural_network_py",
-        ["neural_network_binding.cpp", "neural_network.cpp", "optimization_algorithms.cpp", "activation_functions.cpp"],
+        ["neural_network_binding.cpp", "neural_network_backward.cpp","neural_network_core.cpp","neural_network_forward.cpp","neural_network_prediction.cpp","neural_network_training.cpp","neural_network_utils.cpp", "optimization_algorithms.cpp", "activation_functions.cpp"],
         include_dirs=[
             pybind11.get_include(), 
             EIGEN_PATH

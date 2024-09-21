@@ -45,10 +45,7 @@ public:
                     const std::vector<Eigen::VectorXd>& targets) const;
 
     // Add this public static method
-    static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string &name, double learning_rate)
-    {
-        return create_optimizer(name, learning_rate);
-    }
+    static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string &name, double learning_rate);
     void reset();
 
 private:
