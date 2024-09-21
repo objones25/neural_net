@@ -163,27 +163,22 @@ double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd>& inputs,
 void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd>& weight_gradients,
                                          std::vector<Eigen::VectorXd>& bias_gradients)
 {
-    try {
-        DEBUG_LOG("Applying regularization");
-        switch (regularization_type) {
-            case RegularizationType::L1:
-                DEBUG_LOG("Applying L1 regularization");
-                for (size_t i = 0; i < weights.size(); ++i) {
-                    weight_gradients[i].array() += regularization_strength * weights[i].array().sign();
-                }
-                break;
-            case RegularizationType::L2:
-                DEBUG_LOG("Applying L2 regularization");
-                for (size_t i = 0; i < weights.size(); ++i) {
-                    weight_gradients[i].array() += regularization_strength * weights[i].array();
-                }
-                break;
-            default:
-                DEBUG_LOG("No regularization applied");
-                break;
+    switch (regularization_type)
+    {
+    case RegularizationType::L1:
+        for (size_t i = 0; i < weights.size(); ++i)
+        {
+            weight_gradients[i].array() += regularization_strength * weights[i].array().sign();
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Error in apply_regularization method: " << e.what() << std::endl;
-        throw;
+        break;
+    case RegularizationType::L2:
+        for (size_t i = 0; i < weights.size(); ++i)
+        {
+            weight_gradients[i].array() += regularization_strength * weights[i].array();
+        }
+        break;
+    default:
+        // No regularization
+        break;
     }
 }

@@ -1,14 +1,15 @@
 #include "neural_network.hpp"
 #include "neural_network_common.hpp"
 
-NeuralNetwork::NeuralNetwork(const std::vector<int> &layer_sizes,
+NeuralNetwork::NeuralNetwork(const std::vector<int>& layer_sizes,
                              ActivationFunction::Type hidden_activation,
                              ActivationFunction::Type output_activation,
                              WeightInitialization weight_init,
-                             const std::string &optimizer_name,
+                             const std::string& optimizer_name,
                              double learning_rate,
                              RegularizationType reg_type,
-                             double reg_strength)
+                             double reg_strength,
+                             double learning_rate_adjustment)
     : layers(layer_sizes),
       activation_function(hidden_activation, output_activation),
       weight_init(weight_init),
@@ -43,7 +44,7 @@ NeuralNetwork::NeuralNetwork(const std::vector<int> &layer_sizes,
 
     std::cout << "Creating optimizer" << std::endl;
     // Use a slightly larger learning rate
-    double adjusted_learning_rate = learning_rate * 10.0; // Increased from 1.0 to 10.0
+    double adjusted_learning_rate = learning_rate * learning_rate_adjustment;
     optimizer = create_optimizer_for_network(optimizer_name, adjusted_learning_rate);
     std::cout << "Optimizer created with adjusted learning rate: " << adjusted_learning_rate << std::endl;
 

@@ -43,6 +43,7 @@ PYBIND11_MODULE(neural_network_py, m)
                       const std::string &,
                       double,
                       NeuralNetwork::RegularizationType,
+                      double,
                       double>(),
              py::arg("layer_sizes"),
              py::arg("hidden_activation") = ActivationFunction::Type::ReLU,
@@ -51,7 +52,8 @@ PYBIND11_MODULE(neural_network_py, m)
              py::arg("optimizer_name") = "GradientDescent",
              py::arg("learning_rate") = 0.01,
              py::arg("reg_type") = NeuralNetwork::RegularizationType::None,
-             py::arg("reg_strength") = 0.0)
+             py::arg("reg_strength") = 0.0,
+             py::arg("learning_rate_adjustment") = 1.0)
         .def("train", [](NeuralNetwork &self, const std::vector<Eigen::VectorXd> &inputs, const std::vector<Eigen::VectorXd> &targets, int epochs, int batch_size, double error_tolerance)
              {
         try {
@@ -74,7 +76,14 @@ PYBIND11_MODULE(neural_network_py, m)
             throw std::runtime_error(std::string("Loss calculation failed: ") + e.what());
         } })
         .def_property_readonly("layers", &NeuralNetwork::getLayers)
-        .def_property_readonly("weights", &NeuralNetwork::getWeights);
+        .def_property_readonly("weights", &NeuralNetwork::getWeights)
+        .def("check_gradients", [](NeuralNetwork &self, const Eigen::VectorXd &input, const Eigen::VectorXd &target)
+             {
+        try {
+            self.check_gradients(input, target);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string("Gradient checking failed: ") + e.what());
+        } }, py::arg("input"), py::arg("target"));
 
     // Register custom exceptions
     py::register_exception<NetworkConfigurationError>(m, "NetworkConfigurationError");
