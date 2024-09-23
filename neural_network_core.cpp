@@ -31,9 +31,9 @@ NeuralNetwork::NeuralNetwork(const std::vector<int>& layer_sizes,
         }
     }
 
-    // Initialize batch_norms vector
-    batch_norms.reserve(layers.size() - 1);
-    for (size_t i = 1; i < layers.size(); ++i)
+    // Initialize batch_norms vector (excluding the output layer)
+    batch_norms.reserve(layers.size() - 2);
+    for (size_t i = 1; i < layers.size() - 1; ++i)
     {
         batch_norms.emplace_back(layers[i]);
     }

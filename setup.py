@@ -1,11 +1,11 @@
-from setuptools import setup, Extension
+from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 import pybind11
 
 # Adjust this path to match your Eigen installation
-EIGEN_PATH = "/usr/local/include/eigen3"
+EIGEN_PATH = "/usr/local/opt/eigen/include/eigen3"
 
-ext_modules = [
+ext_modules: list[Pybind11Extension] = [
     Pybind11Extension("neural_network_py",
         ["neural_network_binding.cpp", 
          "neural_network_backward.cpp",
