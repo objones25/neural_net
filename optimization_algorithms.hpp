@@ -1,14 +1,13 @@
 #pragma once
-
 #include <Eigen/Dense>
-#include <memory>
+#include "layer.hpp"
+#include "exceptions.hpp"
 
 class OptimizationAlgorithm {
 public:
-    virtual void update(Eigen::MatrixXd& w, Eigen::VectorXd& b,
-                        const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) = 0;
-    virtual void set_learning_rate(double lr) = 0;
-    virtual double get_learning_rate() const = 0;
+    virtual void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) = 0;
+    virtual void setLearningRate(double lr) = 0;
+    virtual double getLearningRate() const = 0;
     virtual ~OptimizationAlgorithm() = default;
 };
 
@@ -18,10 +17,9 @@ private:
 
 public:
     GradientDescent(double lr);
-    void update(Eigen::MatrixXd& w, Eigen::VectorXd& b,
-                const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void set_learning_rate(double lr) override { learning_rate = lr; }
-    double get_learning_rate() const override { return learning_rate; }
+    void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
+    void setLearningRate(double lr) override { learning_rate = lr; }
+    double getLearningRate() const override { return learning_rate; }
 };
 
 class Adam : public OptimizationAlgorithm {
@@ -34,27 +32,24 @@ private:
 
 public:
     Adam(double lr = 0.001, double b1 = 0.9, double b2 = 0.999, double eps = 1e-8);
-    void update(Eigen::MatrixXd& w, Eigen::VectorXd& b,
-                const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void set_learning_rate(double lr) override { learning_rate = lr; }
-    double get_learning_rate() const override { return learning_rate; }
+    void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
+    void setLearningRate(double lr) override { learning_rate = lr; }
+    double getLearningRate() const override { return learning_rate; }
 };
 
 class RMSprop : public OptimizationAlgorithm {
 private:
     double learning_rate;
-    double beta;
+    double decay_rate;
     double epsilon;
-    Eigen::MatrixXd v_w;
-    Eigen::VectorXd v_b;
+    Eigen::MatrixXd square_grad_w;
+    Eigen::VectorXd square_grad_b;
 
 public:
-    RMSprop(double lr = 0.001, double b = 0.9, double eps = 1e-8);
-    void update(Eigen::MatrixXd& w, Eigen::VectorXd& b,
-                const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void set_learning_rate(double lr) override { learning_rate = lr; }
-    double get_learning_rate() const override { return learning_rate; }
+    RMSprop(double lr = 0.001, double decay = 0.9, double eps = 1e-8);
+    void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
+    void setLearningRate(double lr) override { learning_rate = lr; }
+    double getLearningRate() const override { return learning_rate; }
 };
 
-// Factory function to create optimizers
 std::unique_ptr<OptimizationAlgorithm> create_optimizer(const std::string& name, double learning_rate);

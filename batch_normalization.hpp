@@ -1,10 +1,20 @@
 #pragma once
 #include <Eigen/Dense>
 #include <cmath>
+#include <vector>
+#include "exceptions.hpp"
 
 class BatchNorm
 {
 public:
+    struct BatchNormCache
+    {
+        Eigen::VectorXd x;
+        std::vector<Eigen::VectorXd> mean;
+        std::vector<Eigen::VectorXd> var;
+        std::vector<Eigen::VectorXd> normalized;
+    };
+
     BatchNorm(int features, double momentum = 0.1, double epsilon = 1e-5)
         : features_(features),
           gamma_(Eigen::VectorXd::Ones(features)),
@@ -16,14 +26,16 @@ public:
           momentum_(momentum),
           epsilon_(epsilon) {}
 
-    Eigen::VectorXd forward(const Eigen::VectorXd &x, bool training = true) const
+    std::pair<Eigen::VectorXd, BatchNormCache> forward(const Eigen::VectorXd &x, bool training = true) const
     {
-        if (x.size() % features_ != 0)
-        {
-            throw std::runtime_error("Input size is not a multiple of the number of features in BatchNorm");
+        if (x.size() % features_ != 0) {
+            throw BatchNormalizationError("Input size is not a multiple of the number of features");
         }
 
         Eigen::VectorXd result(x.size());
+        BatchNormCache cache;
+        cache.x = x;
+
         for (int i = 0; i < x.size(); i += features_)
         {
             Eigen::VectorXd slice = x.segment(i, features_);
@@ -33,6 +45,10 @@ public:
                 Eigen::VectorXd mean = slice.mean() * Eigen::VectorXd::Ones(features_);
                 Eigen::VectorXd var = (slice.array() - mean.array()).square().mean() * Eigen::VectorXd::Ones(features_);
                 normalized = (slice.array() - mean.array()) / (var.array() + epsilon_).sqrt();
+
+                cache.mean.push_back(mean);
+                cache.var.push_back(var);
+                cache.normalized.push_back(normalized);
             }
             else
             {
@@ -40,46 +56,48 @@ public:
             }
             result.segment(i, features_) = gamma_.array() * normalized.array() + beta_.array();
         }
-        return result;
-    }
 
-    Eigen::VectorXd backward(const Eigen::VectorXd &dout, const Eigen::VectorXd &x)
-    {
-        if (x.size() % features_ != 0 || dout.size() != x.size())
+        if (training)
         {
-            throw std::runtime_error("Input size mismatch in BatchNorm backward pass");
+            update_running_stats(cache.mean.back(), cache.var.back());
         }
 
-        Eigen::VectorXd dx = Eigen::VectorXd::Zero(x.size());
+        return {result, cache};
+    }
+
+    Eigen::VectorXd backward(const Eigen::VectorXd &dout, const BatchNormCache &cache)
+    {
+        if (dout.size() != cache.x.size()) {
+            throw BatchNormalizationError("Input size mismatch in BatchNorm backward pass");
+        }
+
+        Eigen::VectorXd dx = Eigen::VectorXd::Zero(dout.size());
         gamma_grad_ = Eigen::VectorXd::Zero(features_);
         beta_grad_ = Eigen::VectorXd::Zero(features_);
 
-        int num_batches = x.size() / features_;
+        int num_batches = dout.size() / features_;
 
-        for (int i = 0; i < x.size(); i += features_)
+        for (int i = 0; i < dout.size(); i += features_)
         {
-            Eigen::VectorXd slice = x.segment(i, features_);
+            Eigen::VectorXd slice = cache.x.segment(i, features_);
             Eigen::VectorXd dout_slice = dout.segment(i, features_);
+            Eigen::VectorXd mean = cache.mean[i / features_];
+            Eigen::VectorXd var = cache.var[i / features_];
+            Eigen::VectorXd normalized = cache.normalized[i / features_];
 
-            double mean = slice.mean();
-            Eigen::VectorXd centered = slice.array() - mean;
-            double var = centered.array().square().mean();
-            double std_dev = std::sqrt(var + epsilon_);
-            Eigen::VectorXd x_norm = centered / std_dev;
-
-            gamma_grad_ += dout_slice.cwiseProduct(x_norm);
+            gamma_grad_ += dout_slice.cwiseProduct(normalized);
             beta_grad_ += dout_slice;
 
-            Eigen::VectorXd dx_norm = dout_slice.cwiseProduct(gamma_);
+            Eigen::ArrayXd dx_norm = dout_slice.array() * gamma_.array();
 
-            Eigen::VectorXd dvar = (dx_norm.cwiseProduct(centered) * (-0.5) * std::pow(var + epsilon_, -1.5)).sum() * Eigen::VectorXd::Ones(features_);
+            double dvar = (dx_norm * (slice.array() - mean.array()) * (-0.5) * (var.array() + epsilon_).pow(-1.5)).sum();
 
-            Eigen::VectorXd dmean = (-dx_norm.sum() / std_dev) * Eigen::VectorXd::Ones(features_) +
-                                    dvar * (-2.0 * centered.sum()) / features_;
+            double dmean = (dx_norm * (-1.0 / (var.array() + epsilon_).sqrt())).sum() +
+                           dvar * (-2.0 * (slice.array() - mean.array()).sum()) / features_;
 
-            dx.segment(i, features_) = dx_norm / std_dev +
-                                       (dvar.array() * 2 * centered.array() / features_).matrix() +
-                                       dmean / features_;
+            dx.segment(i, features_) = (dx_norm / (var.array() + epsilon_).sqrt() +
+                                        dvar * 2.0 * (slice.array() - mean.array()) / features_ +
+                                        dmean / features_).matrix();
         }
 
         gamma_grad_ /= num_batches;
@@ -88,7 +106,7 @@ public:
         return dx;
     }
 
-    void update_running_stats(const Eigen::VectorXd &mean, const Eigen::VectorXd &var)
+    void update_running_stats(const Eigen::VectorXd &mean, const Eigen::VectorXd &var) const
     {
         running_mean_ = momentum_ * running_mean_ + (1.0 - momentum_) * mean;
         running_var_ = momentum_ * running_var_ + (1.0 - momentum_) * var;
@@ -101,11 +119,12 @@ public:
     void set_beta(const Eigen::VectorXd &beta) { beta_ = beta; }
     const Eigen::VectorXd &get_gamma_grad() const { return gamma_grad_; }
     const Eigen::VectorXd &get_beta_grad() const { return beta_grad_; }
+    double get_epsilon() const { return epsilon_; }
 
 private:
     int features_;
     Eigen::VectorXd gamma_, beta_;
-    Eigen::VectorXd running_mean_, running_var_;
+    mutable Eigen::VectorXd running_mean_, running_var_;
     Eigen::VectorXd gamma_grad_, beta_grad_;
     double momentum_, epsilon_;
 };

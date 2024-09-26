@@ -1,11 +1,12 @@
 #pragma once
 
+#include <iostream>
 #include <vector>
 #include <memory>
 #include <Eigen/Dense>
 #include "activation_functions.hpp"
 #include "optimization_algorithms.hpp"
-#include "batch_normalization.hpp"
+#include "layer.hpp"
 
 class NeuralNetwork
 {
@@ -18,12 +19,16 @@ public:
     };
     enum class RegularizationType
     {
-        None,
+        NONE,
         L1,
         L2
     };
-    const std::vector<int> &getLayers() const { return layers; }
-    const std::vector<Eigen::MatrixXd> &getWeights() const { return weights; }
+
+    void set_weights(const std::vector<Eigen::MatrixXd>& new_weights);
+    void set_biases(const std::vector<Eigen::VectorXd>& new_biases);
+    const std::vector<Layer>& getLayers() const { return layers; }
+    void set_debug(bool debug) { debug_mode = debug; }
+    bool get_debug() const { return debug_mode; }
 
     NeuralNetwork(const std::vector<int> &layer_sizes,
                   ActivationFunction::Type hidden_activation = ActivationFunction::Type::ReLU,
@@ -31,9 +36,10 @@ public:
                   WeightInitialization weight_init = WeightInitialization::Random,
                   const std::string &optimizer_name = "GradientDescent",
                   double learning_rate = 0.01,
-                  RegularizationType reg_type = RegularizationType::None,
+                  RegularizationType reg_type = RegularizationType::NONE,
                   double reg_strength = 0.0,
-                  double learning_rate_adjustment = 1.0);
+                  double learning_rate_adjustment = 1.0,
+                  bool use_batch_norm = true);
 
     void train(const std::vector<Eigen::VectorXd> &inputs,
                const std::vector<Eigen::VectorXd> &targets,
@@ -45,21 +51,20 @@ public:
     double get_loss(const std::vector<Eigen::VectorXd> &inputs,
                     const std::vector<Eigen::VectorXd> &targets) const;
 
-    // Add this public static method
     static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string &name, double learning_rate);
     void reset();
     void check_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
 
 private:
-    std::vector<int> layers;
-    std::vector<Eigen::MatrixXd> weights;
-    std::vector<Eigen::VectorXd> biases;
-    std::vector<BatchNorm> batch_norms;
+    std::vector<Layer> layers;
+    std::vector<int> layer_sizes;
     ActivationFunction activation_function;
     WeightInitialization weight_init;
     std::unique_ptr<OptimizationAlgorithm> optimizer;
     RegularizationType regularization_type;
     double regularization_strength;
+    bool use_batch_norm;
+    bool debug_mode = false;
 
     void initialize_weights();
     void validate() const;
@@ -78,4 +83,9 @@ private:
     void check_target_size(const Eigen::VectorXd &target) const;
     bool is_valid(const Eigen::MatrixXd &mat) const;
     bool is_valid(const Eigen::VectorXd &vec) const;
+    void debug_print(const std::string& message) const {
+        if (debug_mode) {
+            std::cout << "[DEBUG] " << message << std::endl;
+        }
+    }
 };

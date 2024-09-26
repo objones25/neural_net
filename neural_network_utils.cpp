@@ -1,74 +1,6 @@
 #include "neural_network.hpp"
 #include "neural_network_common.hpp"
 
-void NeuralNetwork::initialize_weights()
-{
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    weights.resize(layers.size() - 1);
-    biases.resize(layers.size() - 1);
-
-    for (size_t i = 0; i < layers.size() - 1; ++i)
-    {
-        int fan_in = layers[i];
-        int fan_out = layers[i + 1];
-
-        std::normal_distribution<> d;
-        switch (weight_init)
-        {
-        case WeightInitialization::Random:
-            d = std::normal_distribution<>(0.0, 0.05);
-            break;
-        case WeightInitialization::Xavier:
-            d = std::normal_distribution<>(0.0, std::sqrt(1.0 / (fan_in + fan_out)));
-            break;
-        case WeightInitialization::He:
-            d = std::normal_distribution<>(0.0, std::sqrt(1.0 / fan_in));
-            break;
-        }
-
-        weights[i] = Eigen::MatrixXd::NullaryExpr(layers[i + 1], layers[i],
-                                                  [&](){ return d(gen); });
-        biases[i] = Eigen::VectorXd::NullaryExpr(layers[i + 1],
-                                                 [&](){ return d(gen); });
-    }
-
-    batch_norms.clear();
-    for (size_t i = 0; i < layers.size() - 1; ++i)
-    {
-        batch_norms.emplace_back(layers[i + 1]);
-    }
-}
-
-void NeuralNetwork::validate() const
-{
-    if (layers.size() < 2)
-    {
-        throw NetworkConfigurationError("Network must have at least two layers");
-    }
-    if (weights.size() != layers.size() - 1)
-    {
-        throw NetworkConfigurationError("Number of weight matrices must match number of layers minus one");
-    }
-    if (biases.size() != layers.size() - 1)
-    {
-        throw NetworkConfigurationError("Number of bias vectors must match number of layers minus one");
-    }
-
-    for (size_t i = 0; i < weights.size(); ++i)
-    {
-        if (weights[i].rows() != layers[i + 1] || weights[i].cols() != layers[i])
-        {
-            throw NetworkConfigurationError("Weight matrix dimensions mismatch");
-        }
-        if (biases[i].size() != layers[i + 1])
-        {
-            throw NetworkConfigurationError("Bias vector size mismatch");
-        }
-    }
-}
-
 bool NeuralNetwork::is_valid(const Eigen::MatrixXd &mat) const
 {
     return ((mat.array() == mat.array()).all() && (mat.array().abs() != std::numeric_limits<double>::infinity()).all());
@@ -84,21 +16,21 @@ void NeuralNetwork::check_gradients(const Eigen::VectorXd &input, const Eigen::V
     double epsilon = 1e-7;
     auto [weight_gradients, bias_gradients] = backpropagate(input, target);
 
-    for (size_t l = 0; l < weights.size(); ++l)
+    for (size_t l = 0; l < layers.size(); ++l)
     {
-        for (int i = 0; i < weights[l].rows(); ++i)
+        for (int i = 0; i < layers[l].weights.rows(); ++i)
         {
-            for (int j = 0; j < weights[l].cols(); ++j)
+            for (int j = 0; j < layers[l].weights.cols(); ++j)
             {
-                double original_value = weights[l](i, j);
+                double original_value = layers[l].weights(i, j);
 
-                weights[l](i, j) = original_value + epsilon;
+                layers[l].weights(i, j) = original_value + epsilon;
                 double loss_plus = get_loss({input}, {target});
 
-                weights[l](i, j) = original_value - epsilon;
+                layers[l].weights(i, j) = original_value - epsilon;
                 double loss_minus = get_loss({input}, {target});
 
-                weights[l](i, j) = original_value;
+                layers[l].weights(i, j) = original_value;
 
                 double numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon);
                 double backprop_gradient = weight_gradients[l](i, j);
@@ -117,10 +49,54 @@ void NeuralNetwork::check_gradients(const Eigen::VectorXd &input, const Eigen::V
     }
 }
 
-void NeuralNetwork::check_weights_initialization() const {
-    for (size_t i = 0; i < weights.size(); ++i) {
-        if (weights[i].size() == 0) {
+void NeuralNetwork::check_weights_initialization() const
+{
+    for (size_t i = 0; i < layers.size(); ++i)
+    {
+        if (layers[i].weights.size() == 0)
+        {
             throw WeightInitializationError("Weights are not properly initialized at layer " + std::to_string(i));
         }
+
+        if (!is_valid(layers[i].weights))
+        {
+            throw WeightInitializationError("Invalid weight values detected at layer " + std::to_string(i));
+        }
+
+        // Check if weights are all zero or very close to zero
+        if (layers[i].weights.isZero(1e-10))
+        {
+            throw WeightInitializationError("Weights are all zero or very close to zero at layer " + std::to_string(i));
+        }
+
+        // Check for NaN or Inf values
+        if (layers[i].weights.hasNaN() || !layers[i].weights.allFinite())
+        {
+            throw WeightInitializationError("NaN or Inf values detected in weights at layer " + std::to_string(i));
+        }
+    }
+}
+
+void NeuralNetwork::set_weights(const std::vector<Eigen::MatrixXd>& new_weights) {
+    if (new_weights.size() != layers.size()) {
+        throw std::invalid_argument("Invalid number of weight matrices");
+    }
+    for (size_t i = 0; i < layers.size(); ++i) {
+        if (new_weights[i].rows() != layers[i].weights.rows() || new_weights[i].cols() != layers[i].weights.cols()) {
+            throw std::invalid_argument("Invalid dimensions for weight matrix " + std::to_string(i));
+        }
+        layers[i].weights = new_weights[i];
+    }
+}
+
+void NeuralNetwork::set_biases(const std::vector<Eigen::VectorXd>& new_biases) {
+    if (new_biases.size() != layers.size()) {
+        throw std::invalid_argument("Invalid number of bias vectors");
+    }
+    for (size_t i = 0; i < layers.size(); ++i) {
+        if (new_biases[i].size() != layers[i].biases.size()) {
+            throw std::invalid_argument("Invalid dimensions for bias vector " + std::to_string(i));
+        }
+        layers[i].biases = new_biases[i];
     }
 }

@@ -32,3 +32,13 @@ class SizeMismatchError : public std::runtime_error {
 public:
     SizeMismatchError(const std::string& what_arg) : std::runtime_error(what_arg) {}
 };
+
+class BatchNormalizationError : public std::runtime_error {
+public:
+    BatchNormalizationError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};
+
+class OptimizerError : public std::runtime_error {
+public:
+    OptimizerError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+};

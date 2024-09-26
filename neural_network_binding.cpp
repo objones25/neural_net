@@ -22,6 +22,7 @@ PYBIND11_MODULE(neural_network_py, m)
         .value("Tanh", ActivationFunction::Type::Tanh)
         .value("Softmax", ActivationFunction::Type::Softmax);
 
+    // Define NeuralNetwork class and its nested enums
     py::class_<NeuralNetwork> neural_network(m, "NeuralNetwork");
 
     py::enum_<NeuralNetwork::WeightInitialization>(neural_network, "WeightInitialization")
@@ -30,11 +31,39 @@ PYBIND11_MODULE(neural_network_py, m)
         .value("He", NeuralNetwork::WeightInitialization::He);
 
     py::enum_<NeuralNetwork::RegularizationType>(neural_network, "RegularizationType")
-        .value("None", NeuralNetwork::RegularizationType::None)
+        .value("NONE", NeuralNetwork::RegularizationType::NONE)
         .value("L1", NeuralNetwork::RegularizationType::L1)
         .value("L2", NeuralNetwork::RegularizationType::L2);
 
-    // Bind NeuralNetwork class
+    // Bind BatchNorm class
+    py::class_<BatchNorm>(m, "BatchNorm")
+        .def(py::init<int, double, double>())
+        .def("forward", &BatchNorm::forward)
+        .def("backward", &BatchNorm::backward)
+        .def("get_gamma", &BatchNorm::get_gamma)
+        .def("get_beta", &BatchNorm::get_beta)
+        .def("set_gamma", &BatchNorm::set_gamma)
+        .def("set_beta", &BatchNorm::set_beta);
+
+    // Bind Layer class (single definition)
+    py::class_<Layer>(m, "Layer")
+        .def(py::init<int, int, bool>())
+        .def_readwrite("weights", &Layer::weights)
+        .def_readwrite("biases", &Layer::biases)
+        .def_readwrite("bn_gamma_grad", &Layer::bn_gamma_grad)
+        .def_readwrite("bn_beta_grad", &Layer::bn_beta_grad)
+        .def_property("batch_norm", 
+            [](const Layer &l) -> BatchNorm * { return l.batch_norm.get(); },
+            [](Layer &l, BatchNorm *bn) { 
+                if (bn == nullptr) {
+                    throw std::invalid_argument("Cannot set batch_norm to null");
+                }
+                l.batch_norm.reset(bn); 
+            })
+        .def("create_batch_norm", [](Layer &l, int features, double momentum, double epsilon)
+             { l.batch_norm = std::make_unique<BatchNorm>(features, momentum, epsilon); });
+
+    // Bind NeuralNetwork class methods and constructor
     neural_network
         .def(py::init<const std::vector<int> &,
                       ActivationFunction::Type,
@@ -44,52 +73,36 @@ PYBIND11_MODULE(neural_network_py, m)
                       double,
                       NeuralNetwork::RegularizationType,
                       double,
-                      double>(),
+                      double,
+                      bool>(),
              py::arg("layer_sizes"),
              py::arg("hidden_activation") = ActivationFunction::Type::ReLU,
              py::arg("output_activation") = ActivationFunction::Type::Sigmoid,
              py::arg("weight_init") = NeuralNetwork::WeightInitialization::Random,
              py::arg("optimizer_name") = "GradientDescent",
              py::arg("learning_rate") = 0.01,
-             py::arg("reg_type") = NeuralNetwork::RegularizationType::None,
+             py::arg("reg_type") = NeuralNetwork::RegularizationType::NONE,
              py::arg("reg_strength") = 0.0,
-             py::arg("learning_rate_adjustment") = 1.0)
-        .def("train", [](NeuralNetwork &self, const std::vector<Eigen::VectorXd> &inputs, const std::vector<Eigen::VectorXd> &targets, int epochs, int batch_size, double error_tolerance)
-             {
-        try {
-            self.train(inputs, targets, epochs, batch_size, error_tolerance);
-        } catch (const std::exception& e) {
-            throw std::runtime_error(std::string("Training failed: ") + e.what());
-        } }, py::arg("inputs"), py::arg("targets"), py::arg("epochs"), py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4)
-        .def("predict", [](const NeuralNetwork &self, const Eigen::VectorXd &input)
-             {
-        try {
-            return self.predict(input);
-        } catch (const std::exception& e) {
-            throw std::runtime_error(std::string("Prediction failed: ") + e.what());
-        } })
-        .def("get_loss", [](const NeuralNetwork &self, const std::vector<Eigen::VectorXd> &inputs, const std::vector<Eigen::VectorXd> &targets)
-             {
-        try {
-            return self.get_loss(inputs, targets);
-        } catch (const std::exception& e) {
-            throw std::runtime_error(std::string("Loss calculation failed: ") + e.what());
-        } })
-        .def_property_readonly("layers", &NeuralNetwork::getLayers)
-        .def_property_readonly("weights", &NeuralNetwork::getWeights)
-        .def("check_gradients", [](NeuralNetwork &self, const Eigen::VectorXd &input, const Eigen::VectorXd &target)
-             {
-        try {
-            self.check_gradients(input, target);
-        } catch (const std::exception& e) {
-            throw std::runtime_error(std::string("Gradient checking failed: ") + e.what());
-        } }, py::arg("input"), py::arg("target"));
+             py::arg("learning_rate_adjustment") = 1.0,
+             py::arg("use_batch_norm") = true)
+        .def("train", &NeuralNetwork::train,
+             py::arg("inputs"), py::arg("targets"), py::arg("epochs"), py::arg("batch_size") = 32, py::arg("error_tolerance") = 1e-4)
+        .def("predict", &NeuralNetwork::predict)
+        .def("get_loss", &NeuralNetwork::get_loss)
+        .def("set_weights", &NeuralNetwork::set_weights)
+        .def("set_biases", &NeuralNetwork::set_biases)
+        .def("getLayers", &NeuralNetwork::getLayers, py::return_value_policy::reference_internal)
+        .def("check_gradients", &NeuralNetwork::check_gradients, py::arg("input"), py::arg("target"))
+        .def("set_debug", &NeuralNetwork::set_debug)
+        .def("get_debug", &NeuralNetwork::get_debug);
 
     // Register custom exceptions
     py::register_exception<NetworkConfigurationError>(m, "NetworkConfigurationError");
     py::register_exception<TrainingDataError>(m, "TrainingDataError");
+    py::register_exception<BatchNormalizationError>(m, "BatchNormalizationError");
+    py::register_exception<OptimizerError>(m, "OptimizerError");
 
-    // Bind optimization algorithms (if needed)
+    // Bind optimization algorithms
     py::class_<OptimizationAlgorithm, std::unique_ptr<OptimizationAlgorithm>>(m, "OptimizationAlgorithm");
     py::class_<GradientDescent, OptimizationAlgorithm>(m, "GradientDescent")
         .def(py::init<double>());
@@ -97,8 +110,6 @@ PYBIND11_MODULE(neural_network_py, m)
         .def(py::init<double, double, double, double>());
     py::class_<RMSprop, OptimizationAlgorithm>(m, "RMSprop")
         .def(py::init<double, double, double>());
-
-    m.def("create_optimizer", &create_optimizer);
 
     std::cout << "Module initialization complete" << std::endl;
 }

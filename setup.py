@@ -15,7 +15,8 @@ ext_modules: list[Pybind11Extension] = [
          "neural_network_training.cpp",
          "neural_network_utils.cpp", 
          "optimization_algorithms.cpp", 
-         "activation_functions.cpp"],
+         "activation_functions.cpp",
+         "layer.cpp"],  # Add this line
         include_dirs=[
             pybind11.get_include(), 
             EIGEN_PATH
