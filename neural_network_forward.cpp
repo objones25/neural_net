@@ -20,7 +20,6 @@ Eigen::VectorXd NeuralNetwork::feedforward(const Eigen::VectorXd &input) const {
         Eigen::VectorXd z = layer.weights * activation + layer.biases;
         
         if (!is_valid(z)) {
-            std::cerr << "Invalid values detected in layer " << i << " pre-activation" << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " pre-activation");
         }
 
@@ -29,7 +28,6 @@ Eigen::VectorXd NeuralNetwork::feedforward(const Eigen::VectorXd &input) const {
             z = bn_output;
             
             if (!is_valid(z)) {
-                std::cerr << "Invalid values detected after batch normalization in layer " << i << std::endl;
                 throw NumericalInstabilityError("Invalid values detected after batch normalization in layer " + std::to_string(i));
             }
         }
@@ -41,7 +39,6 @@ Eigen::VectorXd NeuralNetwork::feedforward(const Eigen::VectorXd &input) const {
         }
 
         if (!is_valid(activation)) {
-            std::cerr << "Invalid values detected in layer " << i << " activation" << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " activation");
         }
     }
@@ -70,7 +67,6 @@ NeuralNetwork::feedforward_with_intermediates(const Eigen::VectorXd &input) cons
         Eigen::VectorXd z = layer.weights * activation + layer.biases;
         
         if (!is_valid(z)) {
-            std::cerr << "Invalid values detected in layer " << i << " pre-activation" << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " pre-activation");
         }
 
@@ -79,7 +75,6 @@ NeuralNetwork::feedforward_with_intermediates(const Eigen::VectorXd &input) cons
             z = bn_output;
             
             if (!is_valid(z)) {
-                std::cerr << "Invalid values detected after batch normalization in layer " << i << std::endl;
                 throw NumericalInstabilityError("Invalid values detected after batch normalization in layer " + std::to_string(i));
             }
         }
@@ -93,7 +88,6 @@ NeuralNetwork::feedforward_with_intermediates(const Eigen::VectorXd &input) cons
         }
 
         if (!is_valid(activation)) {
-            std::cerr << "Invalid values detected in layer " << i << " activation" << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " activation");
         }
 

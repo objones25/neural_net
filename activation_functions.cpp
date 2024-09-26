@@ -84,73 +84,29 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getF
     case Type::Linear:
         return [](const Eigen::VectorXd &x) noexcept -> Eigen::VectorXd
         {
-            try
-            {
-                return x;
-            }
-            catch (...)
-            {
-                std::cerr << "Error in Linear activation" << std::endl;
-                return Eigen::VectorXd::Zero(x.size());
-            }
+            return x;
         };
     case Type::ReLU:
         return [](const Eigen::VectorXd &x) noexcept -> Eigen::VectorXd
         {
-            try
-            {
-                // std::cout << "Applying ReLU activation" << std::endl;
-                Eigen::VectorXd result = x.cwiseMax(0.0);
-                // std::cout << "ReLU input: " << x.transpose() << std::endl;
-                // std::cout << "ReLU output: " << result.transpose() << std::endl;
-                return result;
-            }
-            catch (...)
-            {
-                std::cerr << "Error in ReLU activation" << std::endl;
-                return Eigen::VectorXd::Zero(x.size());
-            }
+            return x.cwiseMax(0.0);
         };
     case Type::Sigmoid:
         return [](const Eigen::VectorXd &x) noexcept -> Eigen::VectorXd
         {
-            try
-            {
-                return 1.0 / (1.0 + (-x.array().min(88.0).max(-88.0)).exp());
-            }
-            catch (...)
-            {
-                std::cerr << "Error in Sigmoid activation" << std::endl;
-                return Eigen::VectorXd::Zero(x.size());
-            }
+            const double clip_value = 88.0;
+            return 1.0 / (1.0 + (-x.array().cwiseMin(clip_value).cwiseMax(-clip_value)).exp());
         };
     case Type::Tanh:
         return [](const Eigen::VectorXd &x) noexcept -> Eigen::VectorXd
         {
-            try
-            {
-                return x.array().tanh();
-            }
-            catch (...)
-            {
-                std::cerr << "Error in Tanh activation" << std::endl;
-                return Eigen::VectorXd::Zero(x.size());
-            }
+            return x.array().tanh();
         };
     case Type::Softmax:
         return [](const Eigen::VectorXd &x) noexcept -> Eigen::VectorXd
         {
-            try
-            {
-                Eigen::VectorXd shifted_x = x.array() - x.maxCoeff();
-                Eigen::VectorXd exp_x = shifted_x.array().exp();
-                return exp_x.array() / (exp_x.sum() + std::numeric_limits<double>::epsilon());
-            }
-            catch (...)
-            {
-                std::cerr << "Error in Softmax activation" << std::endl;
-                return Eigen::VectorXd::Zero(x.size());
-            }
+            Eigen::VectorXd exp_x = (x.array() - x.maxCoeff()).exp();
+            return exp_x.array() / exp_x.sum();
         };
     default:
         throw std::invalid_argument("Unknown activation function type");

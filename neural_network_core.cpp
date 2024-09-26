@@ -74,37 +74,32 @@ void NeuralNetwork::reset()
     // Reset any other necessary state
 }
 
-void NeuralNetwork::initialize_weights()
-{
+void NeuralNetwork::initialize_weights() {
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    for (auto &layer : layers)
-    {
+    for (auto &layer : layers) {
         int fan_in = layer.weights.cols();
         int fan_out = layer.weights.rows();
 
         std::normal_distribution<> d;
-        switch (weight_init)
-        {
-        case WeightInitialization::Random:
-            d = std::normal_distribution<>(0.0, 0.01);  // Reduced standard deviation
-            break;
-        case WeightInitialization::Xavier:
-            d = std::normal_distribution<>(0.0, std::sqrt(2.0 / (fan_in + fan_out)));
-            break;
-        case WeightInitialization::He:
-            d = std::normal_distribution<>(0.0, std::sqrt(2.0 / fan_in));
-            break;
+        switch (weight_init) {
+            case WeightInitialization::Random:
+                d = std::normal_distribution<>(0.0, 0.01);
+                break;
+            case WeightInitialization::Xavier:
+                d = std::normal_distribution<>(0.0, std::sqrt(2.0 / (fan_in + fan_out)));
+                break;
+            case WeightInitialization::He:
+                d = std::normal_distribution<>(0.0, std::sqrt(2.0 / fan_in));
+                break;
         }
 
         layer.weights = Eigen::MatrixXd::NullaryExpr(fan_out, fan_in,
-                                                     [&]()
-                                                     { return d(gen); });
-        layer.biases = Eigen::VectorXd::Zero(fan_out);  // Initialize biases to zero
+                                                     [&]() { return d(gen); });
+        layer.biases = Eigen::VectorXd::Zero(fan_out);
 
-        if (!is_valid(layer.weights) || !is_valid(layer.biases))
-        {
+        if (!is_valid(layer.weights) || !is_valid(layer.biases)) {
             throw WeightInitializationError("Invalid values detected during weight initialization");
         }
     }

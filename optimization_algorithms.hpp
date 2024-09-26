@@ -2,6 +2,7 @@
 #include <Eigen/Dense>
 #include "layer.hpp"
 #include "exceptions.hpp"
+#include "clip_and_check.hpp"
 
 class OptimizationAlgorithm {
 public:

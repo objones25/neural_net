@@ -5,13 +5,13 @@
 const double MAX_LEARNING_RATE = 1.0;
 const double CLIP_VALUE = 1.0;
 
-template <typename Derived>
-void clip_and_check(Eigen::MatrixBase<Derived>& mat, const std::string& name, double clip_value = 1e6) {
-    mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
-    if (!mat.allFinite()) {
-        throw NumericalInstabilityError("Non-finite values detected in " + name);
-    }
-}
+// template <typename Derived>
+// void clip_and_check(Eigen::MatrixBase<Derived>& mat, const std::string& name, double clip_value = 1e6) {
+//     mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
+//     if (!mat.allFinite()) {
+//         throw NumericalInstabilityError("Non-finite values detected in " + name);
+//     }
+// }
 
 GradientDescent::GradientDescent(double lr) : learning_rate(lr) {}
 

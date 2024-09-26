@@ -1,14 +1,6 @@
 #include "neural_network.hpp"
 #include "neural_network_common.hpp"
 
-template <typename Derived>
-void clip_and_check(Eigen::MatrixBase<Derived>& mat, const std::string& name, double clip_value = 1e6) {
-    mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
-    if (!mat.allFinite()) {
-        throw NumericalInstabilityError("Non-finite values detected in " + name);
-    }
-}
-
 void NeuralNetwork::train(const std::vector<Eigen::VectorXd> &inputs,
                           const std::vector<Eigen::VectorXd> &targets,
                           int epochs,
@@ -171,49 +163,44 @@ void NeuralNetwork::update_batch(const std::vector<Eigen::VectorXd> &batch_input
 void NeuralNetwork::apply_regularization(std::vector<Eigen::MatrixXd> &weight_gradients,
                                          std::vector<Eigen::VectorXd> &bias_gradients)
 {
-    try
-    {
-        check_weights_initialization();
-
-        if (layers.size() != weight_gradients.size())
-        {
-            throw SizeMismatchError("Number of layers does not match number of gradient matrices");
-        }
-
-        switch (regularization_type)
-        {
-        case RegularizationType::L1:
-#pragma omp parallel for
-            for (size_t i = 0; i < layers.size(); ++i)
-            {
-                if (layers[i].weights.rows() != weight_gradients[i].rows() || layers[i].weights.cols() != weight_gradients[i].cols())
-                {
-                    throw SizeMismatchError("Weight matrix size mismatch at index " + std::to_string(i));
-                }
-                weight_gradients[i] += regularization_strength * layers[i].weights.unaryExpr([](double x)
-                                                                                             { return x > 0 ? 1.0 : -1.0; });
-            }
-            break;
-        case RegularizationType::L2:
-#pragma omp parallel for
-            for (size_t i = 0; i < layers.size(); ++i)
-            {
-                if (layers[i].weights.rows() != weight_gradients[i].rows() || layers[i].weights.cols() != weight_gradients[i].cols())
-                {
-                    throw SizeMismatchError("Weight matrix size mismatch at index " + std::to_string(i));
-                }
-                weight_gradients[i] += regularization_strength * layers[i].weights;
-            }
-            break;
-        default:
-            // No regularization
-            break;
-        }
+    if (layers.size() != weight_gradients.size()) {
+        throw SizeMismatchError("Number of layers does not match number of gradient matrices");
     }
-    catch (const std::exception &e)
+
+    switch (regularization_type)
     {
-        std::cerr << "Error in apply_regularization: " << e.what() << std::endl;
-        throw;
+    case RegularizationType::L1:
+        #pragma omp parallel for
+        for (size_t i = 0; i < layers.size(); ++i)
+        {
+            if (layers[i].weights.rows() != weight_gradients[i].rows() || layers[i].weights.cols() != weight_gradients[i].cols()) {
+                throw SizeMismatchError("Weight matrix size mismatch at index " + std::to_string(i));
+            }
+            weight_gradients[i] += regularization_strength * layers[i].weights.unaryExpr([](double x) {
+                return x > 0 ? 1.0 : (x < 0 ? -1.0 : 0.0);  // Handle zero case
+            });
+        }
+        break;
+    case RegularizationType::L2:
+        #pragma omp parallel for
+        for (size_t i = 0; i < layers.size(); ++i)
+        {
+            if (layers[i].weights.rows() != weight_gradients[i].rows() || layers[i].weights.cols() != weight_gradients[i].cols()) {
+                throw SizeMismatchError("Weight matrix size mismatch at index " + std::to_string(i));
+            }
+            weight_gradients[i] += regularization_strength * layers[i].weights;
+        }
+        break;
+    default:
+        // No regularization
+        break;
+    }
+
+    // Clip gradients after applying regularization
+    for (size_t i = 0; i < layers.size(); ++i)
+    {
+        clip_and_check(weight_gradients[i], "Weight gradients after regularization", 1e3);
+        clip_and_check(bias_gradients[i], "Bias gradients after regularization", 1e3);
     }
 }
 

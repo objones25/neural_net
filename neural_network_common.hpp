@@ -7,6 +7,7 @@
 #include "optimization_algorithms.hpp"
 #include "batch_normalization.hpp"
 #include "exceptions.hpp"
+#include "clip_and_check.hpp"
 #include <algorithm>
 #include <random>
 #include <numeric>

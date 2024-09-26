@@ -22,7 +22,8 @@ NeuralNetwork::backpropagate(const Eigen::Ref<const Eigen::VectorXd> &input,
         delta = delta.cwiseProduct(activation_function.derivativeOutput(z_values.back()));
     }
 
-    const double safe_epsilon = 1e-12;
+    // Clip delta to prevent extreme values
+    clip_and_check(delta, "Output delta", 1e3);
 
     // Backpropagate error
     for (int i = layers.size() - 1; i >= 0; --i) {
@@ -30,8 +31,8 @@ NeuralNetwork::backpropagate(const Eigen::Ref<const Eigen::VectorXd> &input,
         bias_gradients[i] = delta;
 
         // Gradient clipping
-        weight_gradients[i] = weight_gradients[i].cwiseMin(1.0).cwiseMax(-1.0);
-        bias_gradients[i] = bias_gradients[i].cwiseMin(1.0).cwiseMax(-1.0);
+        clip_and_check(weight_gradients[i], "Weight gradients", 1e3);
+        clip_and_check(bias_gradients[i], "Bias gradients", 1e3);
 
         if (i > 0) {
             Eigen::VectorXd d_layer = layers[i].weights.transpose() * delta;
@@ -43,7 +44,7 @@ NeuralNetwork::backpropagate(const Eigen::Ref<const Eigen::VectorXd> &input,
                 Eigen::VectorXd var = ((z_values[i-1].array() - mean.array()).square().mean()) * Eigen::VectorXd::Ones(z_values[i-1].size());
                 cache.mean.push_back(mean);
                 cache.var.push_back(var);
-                cache.normalized.push_back((z_values[i-1].array() - mean.array()) / (var.array() + layers[i-1].batch_norm->get_epsilon() + safe_epsilon).sqrt());
+                cache.normalized.push_back((z_values[i-1].array() - mean.array()) / (var.array() + layers[i-1].batch_norm->get_epsilon()).sqrt());
 
                 d_layer = layers[i-1].batch_norm->backward(d_layer, cache);
                 layers[i-1].bn_gamma_grad = layers[i-1].batch_norm->get_gamma_grad();
@@ -51,18 +52,7 @@ NeuralNetwork::backpropagate(const Eigen::Ref<const Eigen::VectorXd> &input,
             }
 
             delta = d_layer.cwiseProduct(activation_function.derivativeHidden(z_values[i-1]));
-        }
-
-        // Check for non-finite values
-        if (!delta.allFinite()) {
-            std::cerr << "Non-finite values detected in delta at layer " << i << std::endl;
-            std::cerr << "Delta: " << delta.transpose() << std::endl;
-            throw NumericalInstabilityError("Non-finite values detected in delta at layer " + std::to_string(i));
-        }
-
-        if (!weight_gradients[i].allFinite() || !bias_gradients[i].allFinite()) {
-            std::cerr << "Non-finite values detected in gradients at layer " << i << std::endl;
-            throw NumericalInstabilityError("Non-finite values detected in gradients at layer " + std::to_string(i));
+            clip_and_check(delta, "Hidden delta", 1e3);
         }
     }
 

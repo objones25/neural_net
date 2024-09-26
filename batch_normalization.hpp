@@ -3,16 +3,7 @@
 #include <cmath>
 #include <vector>
 #include "exceptions.hpp"
-
-template <typename Derived>
-void clip_and_check(Eigen::DenseBase<Derived> &mat, const std::string &name, double clip_value = 1e6)
-{
-    mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
-    if (!mat.allFinite())
-    {
-        throw NumericalInstabilityError("Non-finite values detected in " + name);
-    }
-}
+#include "clip_and_check.hpp"
 
 class BatchNorm
 {
@@ -57,6 +48,7 @@ public:
                 Eigen::VectorXd var = (slice.array() - mean.array()).square().mean() * Eigen::VectorXd::Ones(features_);
                 Eigen::VectorXd inv_std = (var.array() + epsilon_).sqrt().inverse();
                 normalized = (slice.array() - mean.array()) * inv_std.array();
+                clip_and_check(normalized, "BatchNorm normalized");
 
                 cache.mean.push_back(mean);
                 cache.var.push_back(var);
@@ -70,10 +62,12 @@ public:
             {
                 Eigen::VectorXd inv_std = (running_var_.array() + epsilon_).sqrt().inverse();
                 normalized = (slice.array() - running_mean_.array()) * inv_std.array();
+                clip_and_check(normalized, "BatchNorm normalized (inference)");
             }
             result.segment(i, features_) = gamma_.array() * normalized.array() + beta_.array();
         }
 
+        clip_and_check(result, "BatchNorm result");
         return {result, cache};
     }
 
@@ -102,19 +96,21 @@ public:
             beta_grad_ += dout_slice;
 
             Eigen::VectorXd inv_std = (var.array() + epsilon_).sqrt().inverse();
-            Eigen::VectorXd inv_var = inv_std.array().square();
 
             Eigen::VectorXd dx_norm = dout_slice.cwiseProduct(gamma_);
-            double dvar = (dx_norm.array() * normalized.array() * inv_std.array() * -0.5).sum();
-            double dmean = (dx_norm.array() * -inv_std.array()).sum();
-            dmean += dvar * normalized.array().mean() * -2;
+            double dvar_sum = (dx_norm.array() * normalized.array() * inv_std.array() * -0.5).sum();
+            Eigen::VectorXd dvar = Eigen::VectorXd::Constant(features_, dvar_sum);
+            double dmean_sum = (dx_norm.array() * -inv_std.array()).sum();
+            Eigen::VectorXd dmean = Eigen::VectorXd::Constant(features_, dmean_sum);
+            dmean += dvar * normalized.mean() * -2;
 
-            Eigen::ArrayXd dx_slice = (dx_norm.array() * inv_std.array()) +
-                                      (dvar * normalized.array() * 2.0 / features_) +
-                                      (dmean / features_ * Eigen::ArrayXd::Ones(features_));
+            Eigen::VectorXd dx_slice = (dx_norm.array() * inv_std.array() +
+                                        dvar.array() * normalized.array() * 2.0 / features_ +
+                                        dmean.array() / features_)
+                                           .matrix();
 
             clip_and_check(dx_slice, "BatchNorm dx_slice");
-            dx.segment(i, features_) = dx_slice.matrix();
+            dx.segment(i, features_) = dx_slice;
         }
 
         clip_and_check(gamma_grad_, "BatchNorm gamma_grad");
