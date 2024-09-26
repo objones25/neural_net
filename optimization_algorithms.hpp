@@ -18,8 +18,8 @@ private:
 public:
     GradientDescent(double lr);
     void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void setLearningRate(double lr) override { learning_rate = lr; }
-    double getLearningRate() const override { return learning_rate; }
+    void setLearningRate(double lr) override;
+    double getLearningRate() const override;
 };
 
 class Adam : public OptimizationAlgorithm {
@@ -33,8 +33,8 @@ private:
 public:
     Adam(double lr = 0.001, double b1 = 0.9, double b2 = 0.999, double eps = 1e-8);
     void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void setLearningRate(double lr) override { learning_rate = lr; }
-    double getLearningRate() const override { return learning_rate; }
+    void setLearningRate(double lr) override;
+    double getLearningRate() const override;
 };
 
 class RMSprop : public OptimizationAlgorithm {
@@ -48,8 +48,8 @@ private:
 public:
     RMSprop(double lr = 0.001, double decay = 0.9, double eps = 1e-8);
     void update(Layer& layer, const Eigen::MatrixXd& dw, const Eigen::VectorXd& db) override;
-    void setLearningRate(double lr) override { learning_rate = lr; }
-    double getLearningRate() const override { return learning_rate; }
+    void setLearningRate(double lr) override;
+    double getLearningRate() const override;
 };
 
 std::unique_ptr<OptimizationAlgorithm> create_optimizer(const std::string& name, double learning_rate);

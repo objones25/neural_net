@@ -88,7 +88,7 @@ void NeuralNetwork::initialize_weights()
         switch (weight_init)
         {
         case WeightInitialization::Random:
-            d = std::normal_distribution<>(0.0, 0.05);
+            d = std::normal_distribution<>(0.0, 0.01);  // Reduced standard deviation
             break;
         case WeightInitialization::Xavier:
             d = std::normal_distribution<>(0.0, std::sqrt(2.0 / (fan_in + fan_out)));
@@ -101,9 +101,7 @@ void NeuralNetwork::initialize_weights()
         layer.weights = Eigen::MatrixXd::NullaryExpr(fan_out, fan_in,
                                                      [&]()
                                                      { return d(gen); });
-        layer.biases = Eigen::VectorXd::NullaryExpr(fan_out,
-                                                    [&]()
-                                                    { return d(gen); });
+        layer.biases = Eigen::VectorXd::Zero(fan_out);  // Initialize biases to zero
 
         if (!is_valid(layer.weights) || !is_valid(layer.biases))
         {

@@ -100,3 +100,16 @@ void NeuralNetwork::set_biases(const std::vector<Eigen::VectorXd>& new_biases) {
         layers[i].biases = new_biases[i];
     }
 }
+
+void NeuralNetwork::set_learning_rate(double lr) {
+    if (optimizer) {
+        optimizer->setLearningRate(lr);
+    }
+}
+
+double NeuralNetwork::get_learning_rate() const {
+    if (optimizer) {
+        return optimizer->getLearningRate();
+    }
+    return 0.0;
+}

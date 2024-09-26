@@ -94,13 +94,16 @@ PYBIND11_MODULE(neural_network_py, m)
         .def("getLayers", &NeuralNetwork::getLayers, py::return_value_policy::reference_internal)
         .def("check_gradients", &NeuralNetwork::check_gradients, py::arg("input"), py::arg("target"))
         .def("set_debug", &NeuralNetwork::set_debug)
-        .def("get_debug", &NeuralNetwork::get_debug);
+        .def("get_debug", &NeuralNetwork::get_debug)
+        .def("set_learning_rate", &NeuralNetwork::set_learning_rate)
+        .def("get_learning_rate", &NeuralNetwork::get_learning_rate);
 
     // Register custom exceptions
     py::register_exception<NetworkConfigurationError>(m, "NetworkConfigurationError");
     py::register_exception<TrainingDataError>(m, "TrainingDataError");
     py::register_exception<BatchNormalizationError>(m, "BatchNormalizationError");
     py::register_exception<OptimizerError>(m, "OptimizerError");
+    py::register_exception<NumericalInstabilityError>(m, "NumericalInstabilityError");
 
     // Bind optimization algorithms
     py::class_<OptimizationAlgorithm, std::unique_ptr<OptimizationAlgorithm>>(m, "OptimizationAlgorithm");

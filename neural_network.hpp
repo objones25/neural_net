@@ -54,6 +54,13 @@ public:
     static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string &name, double learning_rate);
     void reset();
     void check_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
+    void clip_gradients(std::vector<Eigen::MatrixXd>& weight_gradients, 
+                        std::vector<Eigen::VectorXd>& bias_gradients, 
+                        double max_norm = 1.0);
+    void set_learning_rate(double lr);
+    double get_learning_rate() const;
+    using LearningRateScheduler = std::function<double(int)>;
+    void set_learning_rate_scheduler(LearningRateScheduler scheduler);
 
 private:
     std::vector<Layer> layers;
@@ -65,6 +72,7 @@ private:
     double regularization_strength;
     bool use_batch_norm;
     bool debug_mode = false;
+    LearningRateScheduler lr_scheduler;
 
     void initialize_weights();
     void validate() const;

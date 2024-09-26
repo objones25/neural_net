@@ -52,5 +52,7 @@ NeuralNetwork::backpropagate(const Eigen::Ref<const Eigen::VectorXd> &input,
         }
     }
 
+    clip_gradients(weight_gradients, bias_gradients);
+
     return {weight_gradients, bias_gradients};
 }

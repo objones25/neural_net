@@ -36,6 +36,11 @@ void NeuralNetwork::train(const std::vector<Eigen::VectorXd> &inputs,
 
         for (int epoch = 0; epoch < epochs; ++epoch)
         {
+            if (lr_scheduler)
+            {
+                double new_lr = lr_scheduler(epoch);
+                optimizer->setLearningRate(new_lr);
+            }
             debug_print("Epoch " + std::to_string(epoch + 1) + "/" + std::to_string(epochs));
             std::shuffle(indices.begin(), indices.end(), generator);
 
@@ -149,6 +154,9 @@ void NeuralNetwork::update_batch(const std::vector<Eigen::VectorXd> &batch_input
     // Apply regularization
     apply_regularization(weight_gradients, bias_gradients);
 
+    // Clip gradients
+    clip_gradients(weight_gradients, bias_gradients);
+
     // Update weights and biases
     for (size_t i = 0; i < layers.size(); ++i)
     {
@@ -245,4 +253,31 @@ double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd> &inputs,
         std::cerr << "Error in get_loss method: " << e.what() << std::endl;
         throw;
     }
+}
+
+void NeuralNetwork::clip_gradients(std::vector<Eigen::MatrixXd> &weight_gradients,
+                                   std::vector<Eigen::VectorXd> &bias_gradients,
+                                   double max_norm)
+{
+    double total_norm = 0.0;
+    for (size_t i = 0; i < weight_gradients.size(); ++i)
+    {
+        total_norm += weight_gradients[i].norm();
+        total_norm += bias_gradients[i].norm();
+    }
+
+    if (total_norm > max_norm)
+    {
+        double scale = max_norm / total_norm;
+        for (size_t i = 0; i < weight_gradients.size(); ++i)
+        {
+            weight_gradients[i] *= scale;
+            bias_gradients[i] *= scale;
+        }
+    }
+}
+
+void NeuralNetwork::set_learning_rate_scheduler(LearningRateScheduler scheduler)
+{
+    lr_scheduler = scheduler;
 }
