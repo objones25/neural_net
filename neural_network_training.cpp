@@ -1,6 +1,14 @@
 #include "neural_network.hpp"
 #include "neural_network_common.hpp"
 
+template <typename Derived>
+void clip_and_check(Eigen::MatrixBase<Derived>& mat, const std::string& name, double clip_value = 1e6) {
+    mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
+    if (!mat.allFinite()) {
+        throw NumericalInstabilityError("Non-finite values detected in " + name);
+    }
+}
+
 void NeuralNetwork::train(const std::vector<Eigen::VectorXd> &inputs,
                           const std::vector<Eigen::VectorXd> &targets,
                           int epochs,
@@ -42,7 +50,6 @@ void NeuralNetwork::train(const std::vector<Eigen::VectorXd> &inputs,
                 optimizer->setLearningRate(new_lr);
             }
             debug_print("Epoch " + std::to_string(epoch + 1) + "/" + std::to_string(epochs));
-            std::shuffle(indices.begin(), indices.end(), generator);
 
             for (size_t i = 0; i < inputs.size(); i += batch_size)
             {
@@ -91,16 +98,6 @@ void NeuralNetwork::train(const std::vector<Eigen::VectorXd> &inputs,
             }
         }
         debug_print("Training completed");
-    }
-    catch (const WeightInitializationError &e)
-    {
-        std::cerr << "Weight initialization error during training: " << e.what() << std::endl;
-        throw;
-    }
-    catch (const SizeMismatchError &e)
-    {
-        std::cerr << "Size mismatch error during training: " << e.what() << std::endl;
-        throw;
     }
     catch (const std::exception &e)
     {
@@ -255,22 +252,18 @@ double NeuralNetwork::get_loss(const std::vector<Eigen::VectorXd> &inputs,
     }
 }
 
-void NeuralNetwork::clip_gradients(std::vector<Eigen::MatrixXd> &weight_gradients,
-                                   std::vector<Eigen::VectorXd> &bias_gradients,
-                                   double max_norm)
-{
+void NeuralNetwork::clip_gradients(std::vector<Eigen::MatrixXd>& weight_gradients,
+                                   std::vector<Eigen::VectorXd>& bias_gradients,
+                                   double max_norm) {
     double total_norm = 0.0;
-    for (size_t i = 0; i < weight_gradients.size(); ++i)
-    {
+    for (size_t i = 0; i < weight_gradients.size(); ++i) {
         total_norm += weight_gradients[i].norm();
         total_norm += bias_gradients[i].norm();
     }
 
-    if (total_norm > max_norm)
-    {
+    if (total_norm > max_norm) {
         double scale = max_norm / total_norm;
-        for (size_t i = 0; i < weight_gradients.size(); ++i)
-        {
+        for (size_t i = 0; i < weight_gradients.size(); ++i) {
             weight_gradients[i] *= scale;
             bias_gradients[i] *= scale;
         }

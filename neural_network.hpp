@@ -24,9 +24,9 @@ public:
         L2
     };
 
-    void set_weights(const std::vector<Eigen::MatrixXd>& new_weights);
-    void set_biases(const std::vector<Eigen::VectorXd>& new_biases);
-    const std::vector<Layer>& getLayers() const { return layers; }
+    void set_weights(const std::vector<Eigen::MatrixXd> &new_weights);
+    void set_biases(const std::vector<Eigen::VectorXd> &new_biases);
+    const std::vector<Layer> &getLayers() const { return layers; }
     void set_debug(bool debug) { debug_mode = debug; }
     bool get_debug() const { return debug_mode; }
 
@@ -54,13 +54,14 @@ public:
     static std::unique_ptr<OptimizationAlgorithm> create_optimizer_for_network(const std::string &name, double learning_rate);
     void reset();
     void check_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target);
-    void clip_gradients(std::vector<Eigen::MatrixXd>& weight_gradients, 
-                        std::vector<Eigen::VectorXd>& bias_gradients, 
+    void clip_gradients(std::vector<Eigen::MatrixXd> &weight_gradients,
+                        std::vector<Eigen::VectorXd> &bias_gradients,
                         double max_norm = 1.0);
     void set_learning_rate(double lr);
     double get_learning_rate() const;
     using LearningRateScheduler = std::function<double(int)>;
     void set_learning_rate_scheduler(LearningRateScheduler scheduler);
+    void set_optimizer_epsilon(double eps);
 
 private:
     std::vector<Layer> layers;
@@ -91,8 +92,10 @@ private:
     void check_target_size(const Eigen::VectorXd &target) const;
     bool is_valid(const Eigen::MatrixXd &mat) const;
     bool is_valid(const Eigen::VectorXd &vec) const;
-    void debug_print(const std::string& message) const {
-        if (debug_mode) {
+    void debug_print(const std::string &message) const
+    {
+        if (debug_mode)
+        {
             std::cout << "[DEBUG] " << message << std::endl;
         }
     }

@@ -24,11 +24,11 @@ Eigen::VectorXd ActivationFunction::activateHidden(const Eigen::VectorXd &x) con
     {
         throw std::invalid_argument("Input vector is empty in activateHidden");
     }
-    //std::cout << "Calculating hidden activation, input size: " << x.size() << std::endl;
-    //std::cout << "Hidden activation input: " << x.transpose() << std::endl;
+    // std::cout << "Calculating hidden activation, input size: " << x.size() << std::endl;
+    // std::cout << "Hidden activation input: " << x.transpose() << std::endl;
     Eigen::VectorXd result = hiddenActivation(x);
-    //std::cout << "Hidden activation result: " << result.transpose() << std::endl;
-    //std::cout << "Hidden activation calculation complete, output size: " << result.size() << std::endl;
+    // std::cout << "Hidden activation result: " << result.transpose() << std::endl;
+    // std::cout << "Hidden activation calculation complete, output size: " << result.size() << std::endl;
     return result;
 }
 
@@ -39,9 +39,9 @@ Eigen::VectorXd ActivationFunction::derivativeHidden(const Eigen::VectorXd &x) c
     {
         throw std::invalid_argument("Input vector is empty in derivativeHidden");
     }
-    //std::cout << "Calculating hidden derivative, input size: " << x.size() << std::endl;
+    // std::cout << "Calculating hidden derivative, input size: " << x.size() << std::endl;
     Eigen::VectorXd result = hiddenDerivative(x);
-    //std::cout << "Hidden derivative calculation complete, output size: " << result.size() << std::endl;
+    // std::cout << "Hidden derivative calculation complete, output size: " << result.size() << std::endl;
     return result;
 }
 
@@ -52,9 +52,9 @@ Eigen::VectorXd ActivationFunction::activateOutput(const Eigen::VectorXd &x) con
     {
         throw std::invalid_argument("Input vector is empty in activateOutput");
     }
-    //std::cout << "Calculating output activation, input size: " << x.size() << std::endl;
+    // std::cout << "Calculating output activation, input size: " << x.size() << std::endl;
     Eigen::VectorXd result = outputActivation(x);
-    //std::cout << "Output activation calculation complete, output size: " << result.size() << std::endl;
+    // std::cout << "Output activation calculation complete, output size: " << result.size() << std::endl;
     return result;
 }
 
@@ -65,9 +65,9 @@ Eigen::VectorXd ActivationFunction::derivativeOutput(const Eigen::VectorXd &x) c
     {
         throw std::invalid_argument("Input vector is empty in derivativeOutput");
     }
-    //std::cout << "Calculating output derivative, input size: " << x.size() << std::endl;
+    // std::cout << "Calculating output derivative, input size: " << x.size() << std::endl;
     Eigen::VectorXd result = outputDerivative(x);
-    //std::cout << "Output derivative calculation complete, output size: " << result.size() << std::endl;
+    // std::cout << "Output derivative calculation complete, output size: " << result.size() << std::endl;
     return result;
 }
 
@@ -99,10 +99,10 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getF
         {
             try
             {
-                //std::cout << "Applying ReLU activation" << std::endl;
+                // std::cout << "Applying ReLU activation" << std::endl;
                 Eigen::VectorXd result = x.cwiseMax(0.0);
-                //std::cout << "ReLU input: " << x.transpose() << std::endl;
-                //std::cout << "ReLU output: " << result.transpose() << std::endl;
+                // std::cout << "ReLU input: " << x.transpose() << std::endl;
+                // std::cout << "ReLU output: " << result.transpose() << std::endl;
                 return result;
             }
             catch (...)
@@ -116,7 +116,7 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getF
         {
             try
             {
-                return 1.0 / (1.0 + (-x.array().min(50.0).max(-50.0)).exp());
+                return 1.0 / (1.0 + (-x.array().min(88.0).max(-88.0)).exp());
             }
             catch (...)
             {
@@ -142,7 +142,8 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getF
         {
             try
             {
-                Eigen::VectorXd exp_x = (x.array() - x.maxCoeff()).exp();
+                Eigen::VectorXd shifted_x = x.array() - x.maxCoeff();
+                Eigen::VectorXd exp_x = shifted_x.array().exp();
                 return exp_x.array() / (exp_x.sum() + std::numeric_limits<double>::epsilon());
             }
             catch (...)
@@ -197,7 +198,7 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getD
         {
             try
             {
-                Eigen::VectorXd s = 1.0 / (1.0 + (-x.array().min(50.0).max(-50.0)).exp());
+                Eigen::VectorXd s = 1.0 / (1.0 + (-x.array().min(88.0).max(-88.0)).exp());
                 return s.array() * (1.0 - s.array());
             }
             catch (...)
@@ -225,7 +226,8 @@ std::function<Eigen::VectorXd(const Eigen::VectorXd &)> ActivationFunction::getD
         {
             try
             {
-                Eigen::VectorXd exp_x = (x.array() - x.maxCoeff()).exp();
+                Eigen::VectorXd shifted_x = x.array() - x.maxCoeff();
+                Eigen::VectorXd exp_x = shifted_x.array().exp();
                 Eigen::VectorXd s = exp_x.array() / (exp_x.sum() + std::numeric_limits<double>::epsilon());
                 return s.array() * (1.0 - s.array());
             }

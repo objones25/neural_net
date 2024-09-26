@@ -4,6 +4,16 @@
 #include <vector>
 #include "exceptions.hpp"
 
+template <typename Derived>
+void clip_and_check(Eigen::DenseBase<Derived> &mat, const std::string &name, double clip_value = 1e6)
+{
+    mat = mat.cwiseMin(clip_value).cwiseMax(-clip_value);
+    if (!mat.allFinite())
+    {
+        throw NumericalInstabilityError("Non-finite values detected in " + name);
+    }
+}
+
 class BatchNorm
 {
 public:
@@ -28,7 +38,8 @@ public:
 
     std::pair<Eigen::VectorXd, BatchNormCache> forward(const Eigen::VectorXd &x, bool training = true) const
     {
-        if (x.size() % features_ != 0) {
+        if (x.size() % features_ != 0)
+        {
             throw BatchNormalizationError("Input size is not a multiple of the number of features");
         }
 
@@ -44,22 +55,23 @@ public:
             {
                 Eigen::VectorXd mean = slice.mean() * Eigen::VectorXd::Ones(features_);
                 Eigen::VectorXd var = (slice.array() - mean.array()).square().mean() * Eigen::VectorXd::Ones(features_);
-                normalized = (slice.array() - mean.array()) / (var.array() + epsilon_).sqrt();
+                Eigen::VectorXd inv_std = (var.array() + epsilon_).sqrt().inverse();
+                normalized = (slice.array() - mean.array()) * inv_std.array();
 
                 cache.mean.push_back(mean);
                 cache.var.push_back(var);
                 cache.normalized.push_back(normalized);
+
+                // Update running statistics
+                running_mean_ = momentum_ * running_mean_ + (1.0 - momentum_) * mean;
+                running_var_ = momentum_ * running_var_ + (1.0 - momentum_) * var;
             }
             else
             {
-                normalized = (slice.array() - running_mean_.array()) / (running_var_.array() + epsilon_).sqrt();
+                Eigen::VectorXd inv_std = (running_var_.array() + epsilon_).sqrt().inverse();
+                normalized = (slice.array() - running_mean_.array()) * inv_std.array();
             }
             result.segment(i, features_) = gamma_.array() * normalized.array() + beta_.array();
-        }
-
-        if (training)
-        {
-            update_running_stats(cache.mean.back(), cache.var.back());
         }
 
         return {result, cache};
@@ -67,7 +79,8 @@ public:
 
     Eigen::VectorXd backward(const Eigen::VectorXd &dout, const BatchNormCache &cache)
     {
-        if (dout.size() != cache.x.size()) {
+        if (dout.size() != cache.x.size())
+        {
             throw BatchNormalizationError("Input size mismatch in BatchNorm backward pass");
         }
 
@@ -88,17 +101,24 @@ public:
             gamma_grad_ += dout_slice.cwiseProduct(normalized);
             beta_grad_ += dout_slice;
 
-            Eigen::ArrayXd dx_norm = dout_slice.array() * gamma_.array();
+            Eigen::VectorXd inv_std = (var.array() + epsilon_).sqrt().inverse();
+            Eigen::VectorXd inv_var = inv_std.array().square();
 
-            double dvar = (dx_norm * (slice.array() - mean.array()) * (-0.5) * (var.array() + epsilon_).pow(-1.5)).sum();
+            Eigen::VectorXd dx_norm = dout_slice.cwiseProduct(gamma_);
+            double dvar = (dx_norm.array() * normalized.array() * inv_std.array() * -0.5).sum();
+            double dmean = (dx_norm.array() * -inv_std.array()).sum();
+            dmean += dvar * normalized.array().mean() * -2;
 
-            double dmean = (dx_norm * (-1.0 / (var.array() + epsilon_).sqrt())).sum() +
-                           dvar * (-2.0 * (slice.array() - mean.array()).sum()) / features_;
+            Eigen::ArrayXd dx_slice = (dx_norm.array() * inv_std.array()) +
+                                      (dvar * normalized.array() * 2.0 / features_) +
+                                      (dmean / features_ * Eigen::ArrayXd::Ones(features_));
 
-            dx.segment(i, features_) = (dx_norm / (var.array() + epsilon_).sqrt() +
-                                        dvar * 2.0 * (slice.array() - mean.array()) / features_ +
-                                        dmean / features_).matrix();
+            clip_and_check(dx_slice, "BatchNorm dx_slice");
+            dx.segment(i, features_) = dx_slice.matrix();
         }
+
+        clip_and_check(gamma_grad_, "BatchNorm gamma_grad");
+        clip_and_check(beta_grad_, "BatchNorm beta_grad");
 
         gamma_grad_ /= num_batches;
         beta_grad_ /= num_batches;

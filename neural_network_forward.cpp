@@ -21,21 +21,15 @@ Eigen::VectorXd NeuralNetwork::feedforward(const Eigen::VectorXd &input) const {
         
         if (!is_valid(z)) {
             std::cerr << "Invalid values detected in layer " << i << " pre-activation" << std::endl;
-            std::cerr << "Weights: " << layer.weights.format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Biases: " << layer.biases.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Activation: " << activation.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Z: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " pre-activation");
         }
 
         if (layer.batch_norm) {
-            auto [bn_output, _] = layer.batch_norm->forward(z, true);
+            auto [bn_output, _] = layer.batch_norm->forward(z, false);  // Use false for inference
             z = bn_output;
             
             if (!is_valid(z)) {
                 std::cerr << "Invalid values detected after batch normalization in layer " << i << std::endl;
-                std::cerr << "Before BN: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-                std::cerr << "After BN: " << bn_output.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
                 throw NumericalInstabilityError("Invalid values detected after batch normalization in layer " + std::to_string(i));
             }
         }
@@ -48,8 +42,6 @@ Eigen::VectorXd NeuralNetwork::feedforward(const Eigen::VectorXd &input) const {
 
         if (!is_valid(activation)) {
             std::cerr << "Invalid values detected in layer " << i << " activation" << std::endl;
-            std::cerr << "Z: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Activation: " << activation.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " activation");
         }
     }
@@ -79,21 +71,15 @@ NeuralNetwork::feedforward_with_intermediates(const Eigen::VectorXd &input) cons
         
         if (!is_valid(z)) {
             std::cerr << "Invalid values detected in layer " << i << " pre-activation" << std::endl;
-            std::cerr << "Weights: " << layer.weights.format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Biases: " << layer.biases.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Activation: " << activation.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Z: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " pre-activation");
         }
 
         if (layer.batch_norm) {
-            auto [bn_output, _] = layer.batch_norm->forward(z, true);
+            auto [bn_output, _] = layer.batch_norm->forward(z, true);  // Use true for training
             z = bn_output;
             
             if (!is_valid(z)) {
                 std::cerr << "Invalid values detected after batch normalization in layer " << i << std::endl;
-                std::cerr << "Before BN: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-                std::cerr << "After BN: " << bn_output.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
                 throw NumericalInstabilityError("Invalid values detected after batch normalization in layer " + std::to_string(i));
             }
         }
@@ -108,8 +94,6 @@ NeuralNetwork::feedforward_with_intermediates(const Eigen::VectorXd &input) cons
 
         if (!is_valid(activation)) {
             std::cerr << "Invalid values detected in layer " << i << " activation" << std::endl;
-            std::cerr << "Z: " << z.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
-            std::cerr << "Activation: " << activation.transpose().format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]")) << std::endl;
             throw NumericalInstabilityError("Invalid values detected in layer " + std::to_string(i) + " activation");
         }
 

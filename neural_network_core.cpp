@@ -133,3 +133,15 @@ void NeuralNetwork::validate() const
         }
     }
 }
+
+void NeuralNetwork::set_optimizer_epsilon(double eps)
+{
+    if (Adam* adam = dynamic_cast<Adam*>(optimizer.get()))
+    {
+        adam->setEpsilon(eps);
+    }
+    else if (RMSprop* rmsprop = dynamic_cast<RMSprop*>(optimizer.get()))
+    {
+        rmsprop->setEpsilon(eps);
+    }
+}

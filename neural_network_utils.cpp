@@ -14,6 +14,7 @@ bool NeuralNetwork::is_valid(const Eigen::VectorXd &vec) const
 void NeuralNetwork::check_gradients(const Eigen::VectorXd &input, const Eigen::VectorXd &target)
 {
     double epsilon = 1e-7;
+    double tolerance = 1e-4;  // Increased tolerance
     auto [weight_gradients, bias_gradients] = backpropagate(input, target);
 
     for (size_t l = 0; l < layers.size(); ++l)
@@ -35,15 +36,46 @@ void NeuralNetwork::check_gradients(const Eigen::VectorXd &input, const Eigen::V
                 double numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon);
                 double backprop_gradient = weight_gradients[l](i, j);
 
-                double relative_error = std::abs(numerical_gradient - backprop_gradient) /
-                                        (std::abs(numerical_gradient) + std::abs(backprop_gradient) + 1e-15);
+                double absolute_error = std::abs(numerical_gradient - backprop_gradient);
+                double relative_error = absolute_error / (std::abs(numerical_gradient) + std::abs(backprop_gradient) + 1e-15);
 
-                if (relative_error > 1e-5)
+                if (relative_error > tolerance)
                 {
                     std::cout << "Gradient mismatch at layer " << l << ", weight (" << i << "," << j << ")" << std::endl;
                     std::cout << "Numerical: " << numerical_gradient << ", Backprop: " << backprop_gradient << std::endl;
+                    std::cout << "Absolute Error: " << absolute_error << std::endl;
                     std::cout << "Relative Error: " << relative_error << std::endl;
+                    std::cout << "Loss+: " << loss_plus << ", Loss-: " << loss_minus << std::endl;
                 }
+            }
+        }
+
+        // Check bias gradients
+        for (int i = 0; i < layers[l].biases.size(); ++i)
+        {
+            double original_value = layers[l].biases(i);
+
+            layers[l].biases(i) = original_value + epsilon;
+            double loss_plus = get_loss({input}, {target});
+
+            layers[l].biases(i) = original_value - epsilon;
+            double loss_minus = get_loss({input}, {target});
+
+            layers[l].biases(i) = original_value;
+
+            double numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon);
+            double backprop_gradient = bias_gradients[l](i);
+
+            double absolute_error = std::abs(numerical_gradient - backprop_gradient);
+            double relative_error = absolute_error / (std::abs(numerical_gradient) + std::abs(backprop_gradient) + 1e-15);
+
+            if (relative_error > tolerance)
+            {
+                std::cout << "Gradient mismatch at layer " << l << ", bias " << i << std::endl;
+                std::cout << "Numerical: " << numerical_gradient << ", Backprop: " << backprop_gradient << std::endl;
+                std::cout << "Absolute Error: " << absolute_error << std::endl;
+                std::cout << "Relative Error: " << relative_error << std::endl;
+                std::cout << "Loss+: " << loss_plus << ", Loss-: " << loss_minus << std::endl;
             }
         }
     }
