@@ -1,1 +1,45 @@
-**/.DS_Store
+# macOS
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+*.cmake
+Makefile
+
+# Build artifacts
+build/
+_skbuild/
+*.so
+*.pyd
+*.dll
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+
+# pytest cache
+.pytest_cache/
