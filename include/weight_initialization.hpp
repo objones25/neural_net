@@ -4,5 +4,6 @@ enum class WeightInitialization
     {
         Xavier,
         He,
-        LeCun
+        LeCun,
+        _COUNT
     };

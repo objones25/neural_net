@@ -14,7 +14,7 @@ Layer::Layer(int input_size, int output_size, ActivationType activation,
 {
     try
     {
-        Logger::log("Initializing Layer");
+        Logger::log("Initializing Layer", LogLevel::INFO);
         if (input_size <= 0 || output_size <= 0)
         {
             throw std::invalid_argument("Input and output sizes must be positive");
@@ -78,12 +78,13 @@ Layer::Layer(int input_size, int output_size, ActivationType activation,
 
         if (!weights.allFinite() || !biases.allFinite())
         {
+            Logger::error("Non-finite values detected in initial weights or biases");
             throw NumericalInstabilityError("Non-finite values detected in initial weights or biases");
         }
     }
     catch (const std::exception &e)
     {
-        Logger::log_exception(e, "Layer constructor");
+        Logger::error("Error in Layer constructor: " + std::string(e.what()));
         throw;
     }
 }
@@ -137,77 +138,100 @@ double Layer::feedforward(const Eigen::MatrixXd &input)
 {
     try
     {
-        std::stringstream ss;
-        ss << "Feedforward called with input shape: (" << input.rows() << ", " << input.cols() << ")";
-        Logger::log(ss.str());
-        ss.str("");
-        ss << "Layer input size: " << input_size << ", output size: " << output_size;
-        Logger::log(ss.str());
-
         const double epsilon = 1e-8;
+
+        Logger::log("Feedforward called with input shape: (" +
+                    std::to_string(input.rows()) + ", " +
+                    std::to_string(input.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("Layer input size: " + std::to_string(input_size) +
+                    ", output size: " + std::to_string(output_size),
+                    LogLevel::DEBUG);
+        Logger::log("Weights shape: (" + std::to_string(weights.rows()) + ", " +
+                    std::to_string(weights.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("Biases shape: (" + std::to_string(biases.size()) + ")", LogLevel::DEBUG);
 
         if (input.cols() != input_size)
         {
-            ss.str("");
-            ss << "Input size mismatch. Expected: " << input_size << ", Got: " << input.cols();
-            throw SizeMismatchError(ss.str());
+            throw SizeMismatchError("Input size mismatch. Expected: " +
+                                    std::to_string(input_size) +
+                                    ", Got: " + std::to_string(input.cols()));
         }
 
         last_input = input;
-        Eigen::MatrixXd z = input * weights.transpose() + biases.transpose().replicate(input.rows(), 1);
+        Eigen::MatrixXd z = input * weights.transpose();
+        Logger::log("After matrix multiplication, z shape: (" +
+                    std::to_string(z.rows()) + ", " +
+                    std::to_string(z.cols()) + ")",
+                    LogLevel::DEBUG);
 
-        if (!z.allFinite())
-        {
-            throw NumericalInstabilityError("Non-finite values detected in pre-activation output");
-        }
+        z.rowwise() += biases.transpose();
+        Logger::log("After adding biases, z shape: (" +
+                    std::to_string(z.rows()) + ", " +
+                    std::to_string(z.cols()) + ")",
+                    LogLevel::DEBUG);
 
         if (use_batch_norm)
         {
-            if (z.rows() == 1)
+            if (input.rows() == 1)
             {
-                throw BatchNormalizationError("Batch size of 1 is not supported for batch normalization");
+                Logger::log("Single sample batch normalization", LogLevel::DEBUG);
+                z = ((z.array().rowwise() - running_mean.transpose().array()) /
+                     (running_variance.array() + epsilon).sqrt().transpose())
+                        .matrix();
+                z = (z.array().rowwise() * gamma.transpose().array()).matrix();
+                z.rowwise() += beta.transpose();
             }
-
-            Eigen::VectorXd batch_mean = z.colwise().mean();
-            Eigen::VectorXd batch_var = ((z.rowwise() - batch_mean.transpose()).array().square().colwise().sum() / (z.rows() - 1)).matrix();
-
-            running_mean = momentum * running_mean + (1 - momentum) * batch_mean;
-            running_variance = momentum * running_variance + (1 - momentum) * batch_var;
-
-            normalized_input = (z.rowwise() - batch_mean.transpose()).array().rowwise() / (batch_var.array() + epsilon).sqrt().transpose();
-
-            if (!normalized_input.allFinite())
+            else
             {
-                throw NumericalInstabilityError("Non-finite values detected after batch normalization");
-            }
+                Logger::log("Batch normalization for " + std::to_string(input.rows()) + " samples", LogLevel::DEBUG);
+                Eigen::VectorXd batch_mean = z.colwise().mean();
+                Eigen::VectorXd batch_var = ((z.rowwise() - batch_mean.transpose()).array().square().colwise().sum() /
+                                             (z.rows() - 1))
+                                                .matrix();
 
-            z = normalized_input.array().rowwise() * gamma.transpose().array() + beta.transpose().array();
+                running_mean = momentum * running_mean + (1 - momentum) * batch_mean;
+                running_variance = momentum * running_variance + (1 - momentum) * batch_var;
+
+                normalized_input = (z.rowwise() - batch_mean.transpose()).array().rowwise() /
+                                   (batch_var.array() + epsilon).sqrt().transpose();
+
+                z = (normalized_input.array().rowwise() * gamma.transpose().array()).matrix();
+                z.rowwise() += beta.transpose();
+            }
+            Logger::log("After batch norm, z shape: (" +
+                        std::to_string(z.rows()) + ", " +
+                        std::to_string(z.cols()) + ")",
+                        LogLevel::DEBUG);
+            Logger::log("Gamma shape: (" + std::to_string(gamma.size()) + ")", LogLevel::DEBUG);
+            Logger::log("Beta shape: (" + std::to_string(beta.size()) + ")", LogLevel::DEBUG);
+            Logger::log("Running mean shape: (" + std::to_string(running_mean.size()) + ")", LogLevel::DEBUG);
+            Logger::log("Running variance shape: (" + std::to_string(running_variance.size()) + ")", LogLevel::DEBUG);
         }
 
+        Logger::log("Before activation, z shape: (" +
+                    std::to_string(z.rows()) + ", " +
+                    std::to_string(z.cols()) + ")",
+                    LogLevel::DEBUG);
         last_output = activate(z);
-
-        if (!last_output.allFinite())
-        {
-            throw NumericalInstabilityError("Non-finite values detected after activation");
-        }
+        Logger::log("After activation, last_output shape: (" +
+                    std::to_string(last_output.rows()) + ", " +
+                    std::to_string(last_output.cols()) + ")",
+                    LogLevel::DEBUG);
 
         if (next_layer)
         {
-            try
-            {
-                return next_layer->feedforward(last_output) + compute_regularization_loss();
-            }
-            catch (const std::exception &e)
-            {
-                throw std::runtime_error("Error in next layer during feedforward: " + std::string(e.what()));
-            }
+            Logger::log("Passing to next layer", LogLevel::DEBUG);
+            return next_layer->feedforward(last_output) + compute_regularization_loss();
         }
-        Logger::log("Finished feedforward in Layer");
+        
+        Logger::log("Finished feedforward in Layer", LogLevel::DEBUG);
         return compute_regularization_loss();
     }
     catch (const std::exception &e)
     {
-        Logger::log_exception(e, "Layer::feedforward");
+        Logger::error("Error in Layer::feedforward: " + std::string(e.what()));
         throw;
     }
 }
@@ -216,17 +240,48 @@ void Layer::backpropagate(const Eigen::MatrixXd &output_gradient, double learnin
 {
     try
     {
-        Logger::log("Starting backpropagation in Layer");
         const double epsilon = 1e-8;
 
-        if (output_gradient.cols() != weights.cols())
+        Logger::log("Starting backpropagation in Layer", LogLevel::DEBUG);
+        Logger::log("Backprop input gradient shape: (" +
+                    std::to_string(output_gradient.rows()) + ", " +
+                    std::to_string(output_gradient.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("Weights shape: (" +
+                    std::to_string(weights.rows()) + ", " +
+                    std::to_string(weights.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("Last input shape: (" +
+                    std::to_string(last_input.rows()) + ", " +
+                    std::to_string(last_input.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("Last output shape: (" +
+                    std::to_string(last_output.rows()) + ", " +
+                    std::to_string(last_output.cols()) + ")",
+                    LogLevel::DEBUG);
+
+        if (output_gradient.cols() != output_size)
         {
-            throw SizeMismatchError("Output gradient size does not match weight matrix dimensions in backpropagate");
+            throw SizeMismatchError("Output gradient size does not match layer output size in backpropagate");
         }
 
         int batch_size = last_input.rows();
+        Logger::log("Batch size: " + std::to_string(batch_size), LogLevel::DEBUG);
 
-        Eigen::MatrixXd d_output = output_gradient.array() * activate_derivative(last_output).array();
+        // Compute the gradient of the activation function
+        Eigen::MatrixXd d_activation = activate_derivative(last_output);
+        Logger::log("Activation derivative shape: (" +
+                    std::to_string(d_activation.rows()) + ", " +
+                    std::to_string(d_activation.cols()) + ")",
+                    LogLevel::DEBUG);
+        
+        // Element-wise multiplication of output gradient and activation gradient
+        Eigen::MatrixXd d_output = output_gradient.array() * d_activation.array();
+        
+        Logger::log("d_output shape: (" +
+                    std::to_string(d_output.rows()) + ", " +
+                    std::to_string(d_output.cols()) + ")",
+                    LogLevel::DEBUG);
 
         Eigen::MatrixXd d_input;
         Eigen::VectorXd d_gamma, d_beta;
@@ -235,39 +290,61 @@ void Layer::backpropagate(const Eigen::MatrixXd &output_gradient, double learnin
         {
             if (batch_size == 1)
             {
-                throw BatchNormalizationError("Batch size of 1 is not supported for batch normalization in backpropagation");
+                Logger::log("Warning: Batch size of 1, using running statistics for batch normalization", LogLevel::WARNING);
+                d_input = d_output.array().rowwise() * (gamma.array() / (running_variance.array() + epsilon).sqrt()).transpose();
             }
+            else
+            {
+                d_gamma = (normalized_input.array() * d_output.array()).colwise().sum();
+                d_beta = d_output.colwise().sum();
 
-            d_gamma = (normalized_input.array() * d_output.array()).colwise().sum();
-            d_beta = d_output.colwise().sum();
+                Eigen::MatrixXd d_normalized = d_output.array().rowwise() * gamma.transpose().array();
 
-            Eigen::MatrixXd d_normalized = d_output.array().rowwise() * gamma.transpose().array();
+                Eigen::VectorXd batch_var = ((last_input.rowwise() - running_mean.transpose()).array().square().colwise().sum() / batch_size).matrix();
+                Eigen::VectorXd d_var = (d_normalized.array() * (last_input.rowwise() - running_mean.transpose()).array()).colwise().sum() *
+                                        (-0.5 * (batch_var.array() + epsilon).pow(-1.5));
 
-            Eigen::VectorXd d_var = ((d_normalized.array() * (last_input.rowwise() - running_mean.transpose()).array()).colwise().sum().array() *
-                                     (-0.5 * (running_variance.array() + epsilon).pow(-1.5)))
-                                        .matrix();
+                Eigen::VectorXd d_mean = (d_normalized.array() * -1 / (batch_var.array() + epsilon).sqrt()).colwise().sum().matrix() +
+                                         (d_var.array() * -2 * (last_input.rowwise() - running_mean.transpose()).colwise().sum().array() / batch_size).matrix();
 
-            Eigen::VectorXd d_mean = (d_normalized.array() * -1 / (running_variance.array() + epsilon).sqrt()).colwise().sum().matrix() + (d_var.array() * -2 * (last_input.rowwise() - running_mean.transpose()).colwise().sum().array() / batch_size).matrix();
-
-            d_input = (d_normalized.array() / (running_variance.array() + epsilon).sqrt().transpose().replicate(batch_size, 1) + d_var.transpose().replicate(batch_size, 1).array() * 2 * (last_input.rowwise() - running_mean.transpose()).array() / batch_size + d_mean.transpose().replicate(batch_size, 1).array() / batch_size).matrix();
+                d_input = (d_normalized.array() / (batch_var.array() + epsilon).sqrt().transpose().replicate(batch_size, 1) +
+                           d_var.transpose().replicate(batch_size, 1).array() * 2 * (last_input.rowwise() - running_mean.transpose()).array() / batch_size +
+                           d_mean.transpose().replicate(batch_size, 1).array() / batch_size)
+                              .matrix();
+            }
         }
         else
         {
             d_input = d_output;
         }
 
+        Logger::log("d_input shape: (" +
+                    std::to_string(d_input.rows()) + ", " +
+                    std::to_string(d_input.cols()) + ")",
+                    LogLevel::DEBUG);
+
         if (!d_input.allFinite())
         {
             throw NumericalInstabilityError("Non-finite values detected in input gradients");
         }
 
-        Eigen::MatrixXd d_weights = last_input.transpose() * d_input + compute_regularization_gradient();
-        Eigen::VectorXd d_biases = d_input.colwise().sum();
+        Eigen::MatrixXd d_weights = last_input.transpose() * d_input / batch_size;
+        Eigen::VectorXd d_biases = d_input.colwise().mean();
+
+        Logger::log("d_weights shape: (" + std::to_string(d_weights.rows()) + ", " +
+                    std::to_string(d_weights.cols()) + ")",
+                    LogLevel::DEBUG);
+        Logger::log("d_biases shape: (" + std::to_string(d_biases.rows()) + ", " +
+                    std::to_string(d_biases.cols()) + ")",
+                    LogLevel::DEBUG);
 
         if (!d_weights.allFinite() || !d_biases.allFinite())
         {
             throw NumericalInstabilityError("Non-finite values detected in weight or bias gradients");
         }
+
+        // Add regularization gradient
+        d_weights += compute_regularization_gradient();
 
         try
         {
@@ -289,8 +366,8 @@ void Layer::backpropagate(const Eigen::MatrixXd &output_gradient, double learnin
 
         if (use_batch_norm)
         {
-            gamma -= learning_rate * d_gamma;
-            beta -= learning_rate * d_beta;
+            gamma -= learning_rate * d_gamma / batch_size;
+            beta -= learning_rate * d_beta / batch_size;
         }
 
         if (!weights.allFinite() || !biases.allFinite())
@@ -316,11 +393,11 @@ void Layer::backpropagate(const Eigen::MatrixXd &output_gradient, double learnin
                 throw std::runtime_error("Error in previous layer during backpropagation: " + std::string(e.what()));
             }
         }
-        Logger::log("Finished backpropagation in Layer");
+        Logger::log("Finished backpropagation in Layer", LogLevel::DEBUG);
     }
     catch (const std::exception &e)
     {
-        Logger::log_exception(e, "Layer::backpropagate");
+        Logger::error("Error in Layer::backpropagate: " + std::string(e.what()));
         throw;
     }
 }
@@ -363,6 +440,45 @@ void Layer::set_learning_rate(double new_learning_rate)
     catch (const std::exception &e)
     {
         Logger::log_exception(e, "Layer::set_learning_rate");
+        throw;
+    }
+}
+
+void Layer::set_regularization(RegularizationType type, double strength)
+{
+    try
+    {
+        Logger::log("Setting regularization for layer");
+
+        if (strength < 0)
+        {
+            throw std::invalid_argument("Regularization strength must be non-negative");
+        }
+
+        regularization_type = type;
+        regularization_strength = strength;
+
+        std::string reg_type_str;
+        switch (type)
+        {
+        case RegularizationType::None:
+            reg_type_str = "None";
+            break;
+        case RegularizationType::L1:
+            reg_type_str = "L1";
+            break;
+        case RegularizationType::L2:
+            reg_type_str = "L2";
+            break;
+        default:
+            reg_type_str = "Unknown";
+        }
+
+        Logger::log("Regularization set - Type: " + reg_type_str + ", Strength: " + std::to_string(strength));
+    }
+    catch (const std::exception &e)
+    {
+        Logger::log_exception(e, "Layer::set_regularization");
         throw;
     }
 }

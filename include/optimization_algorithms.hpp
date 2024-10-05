@@ -40,6 +40,7 @@ protected:
     {
         if (!mat.allFinite())
         {
+            Logger::error("Non-finite values detected in " + name);
             throw NumericalInstabilityError("Non-finite values detected in " + name);
         }
     }
@@ -48,6 +49,7 @@ protected:
     {
         if (!vec.allFinite())
         {
+            Logger::error("Non-finite values detected in " + name);
             throw NumericalInstabilityError("Non-finite values detected in " + name);
         }
     }
@@ -80,7 +82,7 @@ public:
     {
         try
         {
-            Logger::log("RMSprop: Starting update");
+            Logger::log("RMSprop: Starting update", LogLevel::DEBUG);
             checkFinite(dw, "dw");
             checkFinite(db, "db");
 
@@ -109,11 +111,11 @@ public:
 
             checkFinite(weights, "weights");
             checkFinite(biases, "biases");
-            Logger::log("RMSprop: Finished update");
+            Logger::log("RMSprop: Finished update", LogLevel::DEBUG);
         }
         catch (const std::exception &e)
         {
-            Logger::log_exception(e, "RMSprop::update");
+            Logger::error("Error in RMSprop::update: " + std::string(e.what()));
             throw;
         }
     }
@@ -150,7 +152,7 @@ public:
     {
         try
         {
-            Logger::log("Adam: Starting update");
+            Logger::log("Adam: Starting update", LogLevel::DEBUG);
             checkFinite(dw, "dw");
             checkFinite(db, "db");
 
@@ -196,11 +198,11 @@ public:
 
             checkFinite(weights, "weights");
             checkFinite(biases, "biases");
-            Logger::log("Adam: Finished update");
+            Logger::log("Adam: Finished update", LogLevel::DEBUG);
         }
         catch (const std::exception &e)
         {
-            Logger::log_exception(e, "Adam::update");
+            Logger::error("Error in Adam::update: " + std::string(e.what()));
             throw;
         }
     }

@@ -10,7 +10,8 @@
 enum class LossFunction
 {
     MeanSquaredError,
-    CrossEntropy
+    CrossEntropy,
+    _COUNT
 };
 
 class NeuralNetwork
@@ -29,20 +30,31 @@ public:
     typename Derived::PlainObject predict(const Eigen::MatrixBase<Derived> &input) const
     {
         Logger::log("Predict function called");
-        Logger::log("Input size: " + std::to_string(input.cols()));
-        Logger::log("Expected input size: " + std::to_string(layers.front()->get_input_size()));
-
-        if (input.cols() != layers.front()->get_input_size())
-        {
-            throw SizeMismatchError("Input size does not match network input layer size");
-        }
+        Logger::log("Input shape: (" + std::to_string(input.rows()) + ", " + std::to_string(input.cols()) + ")");
 
         typename Derived::PlainObject current_input = input;
-        for (const auto &layer : layers)
+        for (size_t i = 0; i < layers.size(); ++i)
         {
-            layer->feedforward(current_input);
-            current_input = layer->get_last_output();
+            Logger::log("Processing layer " + std::to_string(i));
+            Logger::log("Layer " + std::to_string(i) + " input shape: (" +
+                        std::to_string(current_input.rows()) + ", " +
+                        std::to_string(current_input.cols()) + ")");
+
+            try
+            {
+                layers[i]->feedforward(current_input);
+                current_input = layers[i]->get_last_output();
+                Logger::log("Layer " + std::to_string(i) + " output shape: (" +
+                            std::to_string(current_input.rows()) + ", " +
+                            std::to_string(current_input.cols()) + ")");
+            }
+            catch (const std::exception &e)
+            {
+                Logger::log("Error in layer " + std::to_string(i) + ": " + e.what());
+                throw;
+            }
         }
+
         return current_input;
     }
 
@@ -59,12 +71,17 @@ public:
     }
 
     void train(const Eigen::MatrixXd &X, const Eigen::MatrixXd &y,
-               int epochs, int batch_size, double learning_rate);
+               int epochs, int batch_size, double learning_rate,
+               double validation_split = 0.2, int patience = 10, double min_delta = 1e-4);
     double calculate_loss(const Eigen::MatrixXd &X, const Eigen::MatrixXd &y);
     void set_learning_rate(double new_learning_rate);
     double get_learning_rate() const;
     void enable_parallel_processing(int num_threads);
     int get_input_size() const { return layers.front()->get_input_size(); }
+    static void enable_debug_logging(bool enable)
+    {
+        Logger::set_debug_mode(enable);
+    }
 
 private:
     std::vector<std::shared_ptr<Layer>> layers;

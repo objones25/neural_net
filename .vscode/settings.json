@@ -77,5 +77,15 @@
         "stop_token": "cpp",
         "thread": "cpp"
     },
-    "python.terminal.activateEnvironment": false
+    "python.terminal.activateEnvironment": true,
+    "python.autoComplete.extraPaths": [
+        "/opt/anaconda3/envs/py312/lib/python3.12/site-packages"
+    ],
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
