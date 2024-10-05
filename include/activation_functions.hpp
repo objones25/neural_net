@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
+#include "logger.hpp"
 
 enum class ActivationType
 {
@@ -7,7 +8,8 @@ enum class ActivationType
     ReLU,
     Sigmoid,
     Tanh,
-    Softmax
+    Softmax,
+    _COUNT
 };
 
 Eigen::MatrixXd softmax(const Eigen::MatrixXd& x);

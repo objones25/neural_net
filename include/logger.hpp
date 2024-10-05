@@ -6,8 +6,16 @@
 #include <sstream>
 #include <exception>
 
+enum class LogLevel {
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR
+};
+
 class Logger {
 private:
+    static LogLevel current_level;
     static bool debug_mode;
 
     static std::string get_current_time() {
@@ -19,9 +27,10 @@ private:
     }
 
 public:
+    static void set_log_level(LogLevel level);
     static void set_debug_mode(bool mode);
     static bool get_debug_mode();
-    static void log(const std::string& message);
+    static void log(const std::string& message, LogLevel level = LogLevel::INFO);
     static void error(const std::string& message);
     static void log_exception(const std::exception& e, const std::string& context = "");
 };
