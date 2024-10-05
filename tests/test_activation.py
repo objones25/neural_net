@@ -9,19 +9,19 @@ try:
     
     if hasattr(neural_network_py, 'ActivationType'):
         print("ActivationType is present")
-        print("ActivationType values:", list(neural_network_py.ActivationType))
+        print("ActivationType values:", list(neural_network_py.ActivationType_values()))
     else:
         print("ActivationType is not present in the module")
-    
+
     if hasattr(neural_network_py, 'WeightInitialization'):
         print("WeightInitialization is present")
-        print("WeightInitialization values:", list(neural_network_py.WeightInitialization))
+        print("WeightInitialization values:", list(neural_network_py.WeightInitialization_values()))
     else:
         print("WeightInitialization is not present in the module")
-    
+
     if hasattr(neural_network_py, 'LossFunction'):
         print("LossFunction is present")
-        print("LossFunction values:", list(neural_network_py.LossFunction))
+        print("LossFunction values:", list(neural_network_py.LossFunction_values()))
     else:
         print("LossFunction is not present in the module")
     

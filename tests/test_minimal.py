@@ -6,8 +6,17 @@ print("sys.path:", sys.path)
 
 try:
     import neural_network_py as nn
+    import numpy as np
+    
     print("neural_network_py imported successfully")
     print("ActivationType:", nn.ActivationType)
+    
+    # Check if enable_debug_logging exists
+    if hasattr(nn.NeuralNetwork, 'enable_debug_logging'):
+        nn.NeuralNetwork.enable_debug_logging(True)
+        print("Debug logging enabled")
+    else:
+        print("Warning: enable_debug_logging method not found")
     
     # Test creating a neural network
     network = nn.NeuralNetwork(
